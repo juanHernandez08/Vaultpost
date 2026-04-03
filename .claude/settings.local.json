@@ -30,7 +30,9 @@
       "Bash(npx shadcn@latest init --help)",
       "Bash(npx shadcn@latest init --yes)",
       "Bash(printf '\\\\n\\\\n')",
-      "Bash(npx shadcn@latest init --defaults)"
+      "Bash(npx shadcn@latest init --defaults)",
+      "Bash(ls -la \"C:\\\\Users\\\\Usuario\\\\Documents\\\\Trabajos Externos\\\\Proyectos personales\\\\Pascuas\\\\app\\\\\\(dashboard\\)\"\")",
+      "Bash(find \"C:\\\\Users\\\\Usuario\\\\Documents\\\\Trabajos Externos\\\\Proyectos personales\\\\Pascuas/app/\\(dashboard\\)\" -type f)"
     ]
   }
 }
