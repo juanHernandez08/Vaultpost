@@ -6,10 +6,10 @@ export default async function DashboardPage() {
   const supabase = createClient()
 
   const [
-    { count: clientsCount },
-    { count: accountsCount },
-    { count: pendingCount },
-    { count: publishedCount },
+    clientsResult,
+    accountsResult,
+    pendingResult,
+    publishedResult,
   ] = await Promise.all([
     supabase.from('clients').select('*', { count: 'exact', head: true }),
     supabase
@@ -26,31 +26,41 @@ export default async function DashboardPage() {
       .eq('status', 'published'),
   ])
 
+  const queryError =
+    clientsResult.error ??
+    accountsResult.error ??
+    pendingResult.error ??
+    publishedResult.error
+
+  if (queryError) {
+    console.error('[DashboardPage] Supabase query error:', queryError.message)
+  }
+
   const stats = [
     {
       label: 'Clientes',
-      value: clientsCount ?? 0,
+      value: clientsResult.count ?? 0,
       icon: Building2,
       color: 'text-blue-500',
       bg: 'bg-blue-50',
     },
     {
       label: 'Cuentas activas',
-      value: accountsCount ?? 0,
+      value: accountsResult.count ?? 0,
       icon: AtSign,
       color: 'text-violet-500',
       bg: 'bg-violet-50',
     },
     {
       label: 'Posts pendientes',
-      value: pendingCount ?? 0,
+      value: pendingResult.count ?? 0,
       icon: Clock,
       color: 'text-amber-500',
       bg: 'bg-amber-50',
     },
     {
       label: 'Publicados',
-      value: publishedCount ?? 0,
+      value: publishedResult.count ?? 0,
       icon: CheckCircle2,
       color: 'text-emerald-500',
       bg: 'bg-emerald-50',
