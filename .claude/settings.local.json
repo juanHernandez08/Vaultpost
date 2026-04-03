@@ -25,7 +25,12 @@
       "Bash(\"C:\\\\Program Files\\\\GitHub CLI\\\\gh.exe\" --version)",
       "Bash(\"C:\\\\Program Files\\\\GitHub CLI\\\\gh.exe\" auth status)",
       "Bash(\"C:\\\\Program Files\\\\GitHub CLI\\\\gh.exe\" repo create pascuas --private --description \"Social media manager webapp for agencies\")",
-      "Bash(\"C:\\\\Program Files\\\\GitHub:*)"
+      "Bash(\"C:\\\\Program Files\\\\GitHub:*)",
+      "Bash(npx shadcn@latest init --style new-york --base-color zinc --css-variables yes)",
+      "Bash(npx shadcn@latest init --help)",
+      "Bash(npx shadcn@latest init --yes)",
+      "Bash(printf '\\\\n\\\\n')",
+      "Bash(npx shadcn@latest init --defaults)"
     ]
   }
 }
