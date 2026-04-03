@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__filesystem__directory_tree",
+      "Bash(find 'C:\\\\Users\\\\Usuario\\\\Documents\\\\Trabajos Externos\\\\Proyectos personales\\\\Pascuas' -maxdepth 3 -type f \\\\\\(-name *.html -o -name index.js -o -name main.js -o -name App.js -o -name App.jsx \\\\\\) ! -path */node_modules/*)",
+      "Bash(find 'C:\\\\Users\\\\Usuario\\\\Documents\\\\Trabajos Externos\\\\Proyectos personales\\\\Pascuas/apps' -maxdepth 2 -type f ! -path */node_modules/*)",
+      "Bash(find 'C:\\\\Users\\\\Usuario\\\\Documents\\\\Trabajos Externos\\\\Proyectos personales\\\\Pascuas/apps/backend' -maxdepth 2 -type f \\\\\\(-name *.ts -o -name *.js \\\\\\) ! -path */node_modules/*)",
+      "Bash(find 'C:/Users/Usuario/Documents/Trabajos Externos/Proyectos personales/Pascuas' -type f \\\\\\(-name *migration* -o -name *schema* \\\\\\))",
+      "Bash(find 'C:/Users/Usuario/Documents/Trabajos Externos/Proyectos personales/Pascuas/apps/backend/src' -type f -name *.ts)",
+      "Bash(powershell -Command \":*)"
+    ]
+  }
+}
