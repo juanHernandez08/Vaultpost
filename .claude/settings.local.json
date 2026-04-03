@@ -7,7 +7,15 @@
       "Bash(find 'C:\\\\Users\\\\Usuario\\\\Documents\\\\Trabajos Externos\\\\Proyectos personales\\\\Pascuas/apps/backend' -maxdepth 2 -type f \\\\\\(-name *.ts -o -name *.js \\\\\\) ! -path */node_modules/*)",
       "Bash(find 'C:/Users/Usuario/Documents/Trabajos Externos/Proyectos personales/Pascuas' -type f \\\\\\(-name *migration* -o -name *schema* \\\\\\))",
       "Bash(find 'C:/Users/Usuario/Documents/Trabajos Externos/Proyectos personales/Pascuas/apps/backend/src' -type f -name *.ts)",
-      "Bash(powershell -Command \":*)"
+      "Bash(powershell -Command \":*)",
+      "Bash(npx create-next-app@latest . --typescript --tailwind --eslint --app --no-src-dir --import-alias \"@/*\")",
+      "Bash(npx create-next-app@latest . --typescript --tailwind --eslint --app --no-src-dir --import-alias \"@/*\" --yes)",
+      "Bash(npx create-next-app@14 . --typescript --tailwind --eslint --app --no-src-dir --import-alias \"@/*\")",
+      "Bash(npx --yes create-next-app@14 . --typescript --tailwind --eslint --app --no-src-dir --import-alias \"@/*\" --name pascuas)",
+      "Bash(npx create-next-app@14 --help)",
+      "Bash(npx create-next-app@14 ./pascuas-temp --typescript --tailwind --eslint --app --no-src-dir --import-alias \"@/*\")",
+      "Bash(echo \"Temp dir removed: $?\")",
+      "Bash(npm run:*)"
     ]
   }
 }
