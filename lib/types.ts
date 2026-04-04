@@ -137,6 +137,7 @@ export type Database = {
           client_id: string
           platform: Platform
           username: string
+          access_token_enc?: string | null
           last_sync?: string | null
           is_active?: boolean
           added_by_id?: string | null
