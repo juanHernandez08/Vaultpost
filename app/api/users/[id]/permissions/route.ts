@@ -14,7 +14,7 @@ export async function PATCH(
   const body: any = await request.json()
   const { permissions } = body as { permissions: unknown }
 
-  if (!permissions || typeof permissions !== 'object') {
+  if (!permissions || typeof permissions !== 'object' || Array.isArray(permissions)) {
     return NextResponse.json({ error: 'permissions es requerido' }, { status: 400 })
   }
 
@@ -30,6 +30,9 @@ export async function PATCH(
     .single()
 
   if (error) {
+    if (error.code === 'PGRST116') {
+      return NextResponse.json({ error: 'Usuario no encontrado' }, { status: 404 })
+    }
     console.error('[PATCH /api/users/:id/permissions]', error.message)
     return NextResponse.json({ error: error.message }, { status: 500 })
   }

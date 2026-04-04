@@ -51,6 +51,7 @@ export async function POST(request: Request) {
   })
 
   if (authError) {
+    console.error('[POST /api/users] createUser:', authError.message)
     return NextResponse.json({ error: authError.message }, { status: 400 })
   }
 
