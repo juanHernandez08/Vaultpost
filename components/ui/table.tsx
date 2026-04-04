@@ -12,7 +12,7 @@ function TableHeader({
   className,
   ...props
 }: React.HTMLAttributes<HTMLTableSectionElement>) {
-  return <thead className={cn('[&_tr]:border-b border-zinc-200', className)} {...props} />
+  return <thead className={cn('[&_tr]:border-b [&_tr]:border-zinc-200', className)} {...props} />
 }
 
 function TableBody({
