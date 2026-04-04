@@ -10,9 +10,8 @@ export async function PATCH(
   const guard = await requireAdminApi()
   if (guard.error) return guard.error
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const body: any = await request.json()
-  const { permissions } = body as { permissions: unknown }
+  const body = await request.json() as { permissions: unknown }
+  const { permissions } = body
 
   if (!permissions || typeof permissions !== 'object' || Array.isArray(permissions)) {
     return NextResponse.json({ error: 'permissions es requerido' }, { status: 400 })
@@ -20,10 +19,9 @@ export async function PATCH(
 
   const adminClient = createAdminClient()
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: user, error } = await (adminClient
-    .from('users') as any)
-    .update({ permissions })
+  const { data: user, error } = await adminClient
+    .from('users')
+    .update({ permissions: permissions as UserPermissions })
     .eq('id', params.id)
     .eq('company_id', guard.user.company_id)
     .select()

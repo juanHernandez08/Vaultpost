@@ -38,7 +38,7 @@ export async function POST(request: Request) {
       company_id: guard.user.company_id,
       name: name.trim(),
       logo_url: logo_url?.trim() || null,
-    } as any)
+    })
     .select()
     .single()
 

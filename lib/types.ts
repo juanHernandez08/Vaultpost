@@ -5,7 +5,7 @@ export type UserRole = 'admin' | 'custom'
 export type PostStatus = 'draft' | 'scheduled' | 'publishing' | 'published' | 'failed'
 export type ContentType = 'post' | 'reel' | 'story' | 'video'
 
-export interface UserPermissions {
+export type UserPermissions = {
   clients?: string[]
   can_publish?: boolean
   can_schedule?: boolean
@@ -13,7 +13,7 @@ export interface UserPermissions {
   can_manage_accounts?: boolean
 }
 
-export interface Company {
+export type Company = {
   id: string
   name: string
   owner_id: string | null
@@ -21,7 +21,7 @@ export interface Company {
   created_at: string
 }
 
-export interface User {
+export type User = {
   id: string
   company_id: string
   email: string
@@ -31,7 +31,7 @@ export interface User {
   created_at: string
 }
 
-export interface Client {
+export type Client = {
   id: string
   company_id: string
   name: string
@@ -39,7 +39,7 @@ export interface Client {
   created_at: string
 }
 
-export interface SocialAccount {
+export type SocialAccount = {
   id: string
   client_id: string
   platform: Platform
@@ -50,11 +50,11 @@ export interface SocialAccount {
   created_at: string
 }
 
-export interface SocialAccountWithClient extends SocialAccount {
+export type SocialAccountWithClient = SocialAccount & {
   client: Pick<Client, 'id' | 'name'> | null
 }
 
-export interface ScheduledPost {
+export type ScheduledPost = {
   id: string
   social_account_id: string
   content_type: ContentType
@@ -67,7 +67,7 @@ export interface ScheduledPost {
   created_at: string
 }
 
-export interface PostMetrics {
+export type PostMetrics = {
   id: string
   scheduled_post_id: string
   likes: number
@@ -95,6 +95,7 @@ export type Database = {
           owner_id?: string | null
           plan?: string
         }
+        Relationships: []
       }
       users: {
         Row: User
@@ -114,6 +115,7 @@ export type Database = {
           role?: UserRole
           permissions?: UserPermissions
         }
+        Relationships: []
       }
       clients: {
         Row: Client
@@ -127,6 +129,7 @@ export type Database = {
           name?: string
           logo_url?: string | null
         }
+        Relationships: []
       }
       social_accounts: {
         Row: SocialAccount
@@ -146,6 +149,7 @@ export type Database = {
           is_active?: boolean
           added_by_id?: string | null
         }
+        Relationships: []
       }
       scheduled_posts: {
         Row: ScheduledPost
@@ -169,6 +173,7 @@ export type Database = {
           error_msg?: string | null
           created_by_id?: string | null
         }
+        Relationships: []
       }
       post_metrics: {
         Row: PostMetrics
@@ -190,6 +195,7 @@ export type Database = {
           engagement_rate?: number
           fetched_at?: string
         }
+        Relationships: []
       }
     }
     Views: Record<string, never>

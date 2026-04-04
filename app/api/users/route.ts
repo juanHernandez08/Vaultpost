@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { requireAdminApi } from '@/lib/api-guard'
-import type { Database } from '@/lib/types'
+import type { UserRole } from '@/lib/types'
 
 export async function GET() {
   const guard = await requireAdminApi()
@@ -63,9 +63,9 @@ export async function POST(request: Request) {
       company_id: guard.user.company_id,
       email: email.trim(),
       full_name: full_name.trim(),
-      role,
+      role: role as UserRole,
       permissions: {},
-    } as any)
+    })
     .select()
     .single()
 
