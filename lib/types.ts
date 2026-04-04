@@ -83,34 +83,117 @@ export type Database = {
     Tables: {
       companies: {
         Row: Company
-        Insert: Omit<Company, 'id' | 'created_at'>
-        Update: Partial<Omit<Company, 'id' | 'created_at'>>
+        Insert: {
+          id?: string
+          name: string
+          owner_id?: string | null
+          plan: string
+        }
+        Update: {
+          id?: string
+          name?: string
+          owner_id?: string | null
+          plan?: string
+        }
       }
       users: {
         Row: User
-        Insert: Omit<User, 'created_at'>
-        Update: Partial<Omit<User, 'id' | 'created_at'>>
+        Insert: {
+          id: string
+          company_id: string
+          email: string
+          full_name?: string | null
+          role: UserRole
+          permissions?: UserPermissions
+        }
+        Update: {
+          id?: string
+          company_id?: string
+          email?: string
+          full_name?: string | null
+          role?: UserRole
+          permissions?: UserPermissions
+        }
       }
       clients: {
         Row: Client
-        Insert: Omit<Client, 'id' | 'created_at'>
-        Update: Partial<Omit<Client, 'id' | 'created_at'>>
+        Insert: {
+          company_id: string
+          name: string
+          logo_url?: string | null
+        }
+        Update: {
+          company_id?: string
+          name?: string
+          logo_url?: string | null
+        }
       }
       social_accounts: {
         Row: SocialAccount
-        Insert: Omit<SocialAccount, 'id' | 'created_at'>
-        Update: Partial<Omit<SocialAccount, 'id' | 'created_at'>>
+        Insert: {
+          client_id: string
+          platform: Platform
+          username: string
+          last_sync?: string | null
+          is_active?: boolean
+          added_by_id?: string | null
+        }
+        Update: {
+          client_id?: string
+          platform?: Platform
+          username?: string
+          last_sync?: string | null
+          is_active?: boolean
+          added_by_id?: string | null
+        }
       }
       scheduled_posts: {
         Row: ScheduledPost
-        Insert: Omit<ScheduledPost, 'id' | 'created_at'>
-        Update: Partial<Omit<ScheduledPost, 'id' | 'created_at'>>
+        Insert: {
+          social_account_id: string
+          content_type: ContentType
+          caption?: string | null
+          media_url?: string | null
+          scheduled_at: string
+          status?: PostStatus
+          error_msg?: string | null
+          created_by_id?: string | null
+        }
+        Update: {
+          social_account_id?: string
+          content_type?: ContentType
+          caption?: string | null
+          media_url?: string | null
+          scheduled_at?: string
+          status?: PostStatus
+          error_msg?: string | null
+          created_by_id?: string | null
+        }
       }
       post_metrics: {
         Row: PostMetrics
-        Insert: Omit<PostMetrics, 'id'>
-        Update: Partial<Omit<PostMetrics, 'id'>>
+        Insert: {
+          scheduled_post_id: string
+          likes: number
+          comments: number
+          shares: number
+          reach: number
+          engagement_rate: number
+          fetched_at: string
+        }
+        Update: {
+          scheduled_post_id?: string
+          likes?: number
+          comments?: number
+          shares?: number
+          reach?: number
+          engagement_rate?: number
+          fetched_at?: string
+        }
       }
     }
+    Views: Record<string, never>
+    Functions: Record<string, never>
+    Enums: Record<string, never>
   }
 }
