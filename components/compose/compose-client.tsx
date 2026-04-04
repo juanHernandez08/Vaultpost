@@ -32,10 +32,9 @@ const CONTENT_TYPES = [
 
 interface ComposeClientProps {
   accounts: SocialAccountWithClient[]
-  userId: string
 }
 
-export function ComposeClient({ accounts, userId }: ComposeClientProps) {
+export function ComposeClient({ accounts }: ComposeClientProps) {
   const [accountId, setAccountId] = useState('')
   const [contentType, setContentType] = useState<string>('post')
   const [caption, setCaption] = useState('')
@@ -82,7 +81,7 @@ export function ComposeClient({ accounts, userId }: ComposeClientProps) {
         content_type: contentType,
         caption: caption || null,
         media_url: mediaUrl || null,
-        scheduled_at: scheduledAt || new Date().toISOString(),
+        scheduled_at: status === 'draft' ? new Date().toISOString() : scheduledAt,
         status,
       }),
     })

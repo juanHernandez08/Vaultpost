@@ -34,5 +34,5 @@ export default async function ComposePage() {
         (profile.permissions?.clients ?? []).includes(a.client_id)
       )
 
-  return <ComposeClient accounts={filteredAccounts} userId={profile.id} />
+  return <ComposeClient accounts={filteredAccounts} />
 }
