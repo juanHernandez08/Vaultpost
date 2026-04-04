@@ -37,3 +37,22 @@ export async function requireAdminApi(): Promise<ApiGuardResult> {
 
   return { user: profile, error: null }
 }
+
+export async function requireAuthApi(): Promise<ApiGuardResult> {
+  const supabase = createClient()
+
+  const { data: { user: authUser } } = await supabase.auth.getUser()
+  if (!authUser) {
+    return { user: null, error: NextResponse.json({ error: 'Unauthorized' }, { status: 401 }) }
+  }
+
+  const { data: profileRaw } = await supabase
+    .from('users').select('*').eq('id', authUser.id).single()
+
+  const profile = profileRaw as User | null
+  if (!profile) {
+    return { user: null, error: NextResponse.json({ error: 'Forbidden' }, { status: 403 }) }
+  }
+
+  return { user: profile, error: null }
+}
