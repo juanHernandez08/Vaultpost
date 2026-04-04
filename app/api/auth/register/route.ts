@@ -3,15 +3,23 @@ import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import type { UserRole } from '@/lib/types'
 
+const PASSWORD_ERROR = 'La contraseña debe tener al menos 8 caracteres, una mayúscula y un número'
+
 function validatePassword(password: string): string | null {
-  if (password.length < 8) return 'La contraseña debe tener al menos 8 caracteres, una mayúscula y un número'
-  if (!/[A-Z]/.test(password)) return 'La contraseña debe tener al menos 8 caracteres, una mayúscula y un número'
-  if (!/[0-9]/.test(password)) return 'La contraseña debe tener al menos 8 caracteres, una mayúscula y un número'
+  if (password.length < 8 || !/[A-Z]/.test(password) || !/[0-9]/.test(password)) {
+    return PASSWORD_ERROR
+  }
   return null
 }
 
 export async function POST(request: Request) {
-  const body = await request.json()
+  let body: { company_id?: string; full_name?: string; email?: string; password?: string }
+  try {
+    body = await request.json()
+  } catch {
+    return NextResponse.json({ error: 'Cuerpo de la solicitud inválido' }, { status: 400 })
+  }
+
   const { company_id, full_name, email, password } = body
 
   // Validar campos requeridos
@@ -42,10 +50,15 @@ export async function POST(request: Request) {
   }
 
   // Determinar rol: primer usuario de la empresa → admin, resto → custom
-  const { count } = await adminClient
+  const { count, error: countError } = await adminClient
     .from('users')
     .select('*', { count: 'exact', head: true })
     .eq('company_id', company_id)
+
+  if (countError) {
+    console.error('[POST /api/auth/register] count users:', countError.message)
+    return NextResponse.json({ error: countError.message }, { status: 500 })
+  }
 
   const role: UserRole = (count ?? 0) === 0 ? 'admin' : 'custom'
 
@@ -78,7 +91,10 @@ export async function POST(request: Request) {
 
   if (userError) {
     // Rollback: eliminar el auth user
-    await adminClient.auth.admin.deleteUser(authData.user.id)
+    const { error: rollbackError } = await adminClient.auth.admin.deleteUser(authData.user.id)
+    if (rollbackError) {
+      console.error('[POST /api/auth/register] ROLLBACK FAILED — orphaned auth user:', authData.user.id, rollbackError.message)
+    }
     console.error('[POST /api/auth/register] insert user:', userError.message)
     return NextResponse.json({ error: userError.message }, { status: 500 })
   }
