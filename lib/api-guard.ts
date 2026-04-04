@@ -46,10 +46,15 @@ export async function requireAuthApi(): Promise<ApiGuardResult> {
     return { user: null, error: NextResponse.json({ error: 'Unauthorized' }, { status: 401 }) }
   }
 
-  const { data: profileRaw } = await supabase
+  const { data: profileRaw, error: profileError } = await supabase
     .from('users').select('*').eq('id', authUser.id).single()
 
   const profile = profileRaw as User | null
+  if (profileError && profileError.code !== 'PGRST116') {
+    // Real DB error (not "no rows found")
+    console.error('[requireAuthApi] profile fetch:', profileError.message)
+    return { user: null, error: NextResponse.json({ error: 'Internal server error' }, { status: 500 }) }
+  }
   if (!profile) {
     return { user: null, error: NextResponse.json({ error: 'Forbidden' }, { status: 403 }) }
   }

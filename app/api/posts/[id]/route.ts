@@ -47,11 +47,23 @@ export async function PATCH(
     )
   }
 
+  const VALID_TYPES = ['post', 'reel', 'story', 'video']
+
   const update: Record<string, unknown> = {}
   if (body.caption !== undefined) update.caption = body.caption?.trim() || null
   if (body.media_url !== undefined) update.media_url = body.media_url?.trim() || null
-  if (body.scheduled_at !== undefined) update.scheduled_at = body.scheduled_at
-  if (body.content_type !== undefined) update.content_type = body.content_type
+  if (body.scheduled_at !== undefined) {
+    if (isNaN(Date.parse(body.scheduled_at))) {
+      return NextResponse.json({ error: 'scheduled_at inválido' }, { status: 400 })
+    }
+    update.scheduled_at = body.scheduled_at
+  }
+  if (body.content_type !== undefined) {
+    if (!VALID_TYPES.includes(body.content_type)) {
+      return NextResponse.json({ error: 'content_type inválido' }, { status: 400 })
+    }
+    update.content_type = body.content_type
+  }
   if (body.status !== undefined && ['draft', 'scheduled'].includes(body.status)) {
     update.status = body.status
   }
