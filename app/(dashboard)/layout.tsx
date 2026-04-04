@@ -18,11 +18,15 @@ export default async function DashboardLayout({
 
   if (!authUser) redirect('/login')
 
-  const { data: profile } = await supabase
+  type ProfileWithCompany = User & { company: Company | null }
+
+  const { data: profileRaw } = await supabase
     .from('users')
     .select('*, company:companies(*)')
     .eq('id', authUser.id)
     .single()
+
+  const profile = profileRaw as ProfileWithCompany | null
 
   const { data: rawAccounts } = await supabase
     .from('social_accounts')
@@ -31,14 +35,12 @@ export default async function DashboardLayout({
     .order('created_at', { ascending: true })
 
   const accounts = (rawAccounts ?? []) as SocialAccountWithClient[]
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const typedProfile = profile as any as (User & { company: Company | null }) | null
 
   return (
     <div className="flex h-screen overflow-hidden bg-zinc-50">
-      <Sidebar accounts={accounts} userRole={typedProfile?.role ?? 'custom'} />
+      <Sidebar accounts={accounts} userRole={profile?.role ?? 'custom'} />
       <div className="flex flex-1 flex-col overflow-hidden">
-        <Topbar user={typedProfile} />
+        <Topbar user={profile} />
         <main className="flex-1 overflow-y-auto p-6">{children}</main>
       </div>
     </div>
