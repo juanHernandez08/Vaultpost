@@ -25,6 +25,26 @@ export async function GET(request: Request) {
   if (accountId) query = query.eq('social_account_id', accountId)
   if (status) query = query.eq('status', status as PostStatus)
 
+  // For non-admin users: pre-filter at DB level by their permitted social accounts
+  // This is defense-in-depth alongside the JS canViewClient filter below
+  if (guard.user.role !== 'admin') {
+    const allowedClientIds: string[] = guard.user.permissions?.clients ?? []
+    if (allowedClientIds.length === 0) {
+      // Non-admin with no assigned clients sees nothing
+      return NextResponse.json({ posts: [] })
+    }
+    // Fetch social account IDs belonging to allowed clients (same user session = RLS applies)
+    const { data: allowedAccounts } = await supabase
+      .from('social_accounts')
+      .select('id')
+      .in('client_id', allowedClientIds)
+    const allowedAccountIds = (allowedAccounts ?? []).map((a: { id: string }) => a.id)
+    if (allowedAccountIds.length === 0) {
+      return NextResponse.json({ posts: [] })
+    }
+    query = query.in('social_account_id', allowedAccountIds)
+  }
+
   const { data: postsRaw, error } = await query
 
   if (error) {
@@ -32,7 +52,7 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
 
-  // Filtrar por permisos del usuario
+  // Secondary JS filter — belt-and-suspenders (primary filter is DB-level above)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const posts = (postsRaw ?? []).filter((p: any) => {
     const clientId = p.social_account?.client_id
