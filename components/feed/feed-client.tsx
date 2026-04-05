@@ -3,7 +3,7 @@
 
 import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
-import { ImageIcon, Heart, MessageCircle, Share2, Users } from 'lucide-react'
+import { ImageIcon, Heart, MessageCircle, Users } from 'lucide-react'
 import type { PostMetrics } from '@/lib/types'
 
 type FeedPost = {
@@ -93,6 +93,7 @@ export function FeedClient({ account, posts }: FeedClientProps) {
                 <div className="aspect-square bg-zinc-100 flex items-center justify-center relative">
                   {post.media_url ? (
                     <a href={post.media_url} target="_blank" rel="noopener noreferrer" className="w-full h-full">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img
                         src={post.media_url}
                         alt={post.caption ?? 'Post'}

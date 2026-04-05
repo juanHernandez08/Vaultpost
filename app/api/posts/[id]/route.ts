@@ -16,6 +16,7 @@ export async function PATCH(
     return NextResponse.json({ error: 'Sin permiso para editar posts' }, { status: 403 })
   }
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let body: any
   try {
     body = await request.json()
@@ -35,6 +36,7 @@ export async function PATCH(
     return NextResponse.json({ error: 'Post no encontrado' }, { status: 404 })
   }
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const post = postRaw as any
   if (!canViewClient(guard.user, post.social_account?.client_id)) {
     return NextResponse.json({ error: 'Sin acceso a este post' }, { status: 403 })
@@ -107,6 +109,7 @@ export async function DELETE(
     return NextResponse.json({ error: 'Post no encontrado' }, { status: 404 })
   }
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const post = postRaw as any
   if (!canViewClient(guard.user, post.social_account?.client_id)) {
     return NextResponse.json({ error: 'Sin acceso a este post' }, { status: 403 })

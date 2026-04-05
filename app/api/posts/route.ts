@@ -33,6 +33,7 @@ export async function GET(request: Request) {
   }
 
   // Filtrar por permisos del usuario
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const posts = (postsRaw ?? []).filter((p: any) => {
     const clientId = p.social_account?.client_id
     if (!clientId) return false
@@ -51,6 +52,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Sin permiso para programar posts' }, { status: 403 })
   }
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let body: any
   try {
     body = await request.json()
