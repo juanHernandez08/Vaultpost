@@ -1,7 +1,9 @@
 import { createClient } from '@/lib/supabase/server'
 import { requireAdmin } from '@/lib/admin-guard'
 import { ClientsClient } from '@/components/admin/clients/clients-client'
-import type { Client } from '@/lib/types'
+import type { Client, SocialAccount } from '@/lib/types'
+
+type ClientWithAccounts = Client & { social_accounts: SocialAccount[] }
 
 export default async function AdminClientsPage() {
   await requireAdmin()
@@ -9,12 +11,12 @@ export default async function AdminClientsPage() {
 
   const { data: clients } = await supabase
     .from('clients')
-    .select('*')
+    .select('*, social_accounts(*)')
     .order('name', { ascending: true })
 
   return (
     <div className="p-6">
-      <ClientsClient initialClients={(clients ?? []) as Client[]} />
+      <ClientsClient initialClients={(clients ?? []) as ClientWithAccounts[]} />
     </div>
   )
 }
