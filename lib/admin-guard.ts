@@ -15,7 +15,7 @@ export async function requireAdmin(): Promise<ProfileWithCompany> {
 
   const { data: profileRaw } = await supabase
     .from('users')
-    .select('*, company:companies(*)')
+    .select('*, company:companies!users_company_id_fkey(*)')
     .eq('id', authUser.id)
     .single()
 

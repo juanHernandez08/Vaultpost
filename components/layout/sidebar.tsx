@@ -19,6 +19,7 @@ import {
 interface SidebarProps {
   accounts: SocialAccountWithClient[]
   userRole: string
+  companyName: string
 }
 
 const PLATFORM_STYLES: Record<string, { bg: string; label: string }> = {
@@ -59,15 +60,18 @@ function NavItem({
   )
 }
 
-export function Sidebar({ accounts, userRole }: SidebarProps) {
+export function Sidebar({ accounts, userRole, companyName }: SidebarProps) {
   const pathname = usePathname()
   const isAdmin = userRole === 'admin'
 
   return (
     <aside className="flex w-60 flex-shrink-0 flex-col border-r border-zinc-200 bg-white">
       {/* Logo */}
-      <div className="flex h-16 items-center border-b border-zinc-200 px-5">
-        <span className="text-lg font-bold text-zinc-900">🌸 Pascuas</span>
+      <div className="flex h-16 items-center gap-3 border-b border-zinc-200 px-5">
+        <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg bg-zinc-900 text-xs font-bold text-white">
+          OM
+        </div>
+        <span className="truncate text-base font-bold text-zinc-900">{companyName}</span>
       </div>
 
       <div className="flex flex-1 flex-col overflow-y-auto py-4">

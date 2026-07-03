@@ -22,7 +22,7 @@ export default async function DashboardLayout({
 
   const { data: profileRaw } = await supabase
     .from('users')
-    .select('*, company:companies(*)')
+    .select('*, company:companies!users_company_id_fkey(*)')
     .eq('id', authUser.id)
     .single()
 
@@ -38,7 +38,11 @@ export default async function DashboardLayout({
 
   return (
     <div className="flex h-screen overflow-hidden bg-zinc-50">
-      <Sidebar accounts={accounts} userRole={profile?.role ?? 'custom'} />
+      <Sidebar
+        accounts={accounts}
+        userRole={profile?.role ?? 'custom'}
+        companyName={profile?.company?.name ?? ''}
+      />
       <div className="flex flex-1 flex-col overflow-hidden">
         <Topbar user={profile} />
         <main className="flex-1 overflow-y-auto p-6">{children}</main>
