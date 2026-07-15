@@ -34,7 +34,13 @@ export default async function DashboardLayout({
     .eq('is_active', true)
     .order('created_at', { ascending: true })
 
-  const accounts = (rawAccounts ?? []) as SocialAccountWithClient[]
+  let accounts = (rawAccounts ?? []) as SocialAccountWithClient[]
+
+  // No-admins solo ven los perfiles de sus clientes asignados
+  if (profile && profile.role !== 'admin') {
+    const allowedClientIds = profile.permissions?.clients ?? []
+    accounts = accounts.filter((a) => allowedClientIds.includes(a.client_id))
+  }
 
   return (
     <div className="flex h-screen overflow-hidden bg-zinc-50">

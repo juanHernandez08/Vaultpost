@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { requireAdminApi } from '@/lib/api-guard'
 import type { UserRole } from '@/lib/types'
+import { validatePassword } from '@/lib/validation'
 
 export async function GET() {
   const guard = await requireAdminApi()
@@ -38,6 +39,11 @@ export async function POST(request: Request) {
 
   if (!['admin', 'custom'].includes(role)) {
     return NextResponse.json({ error: 'role debe ser admin o custom' }, { status: 400 })
+  }
+
+  const passwordError = validatePassword(password)
+  if (passwordError) {
+    return NextResponse.json({ error: passwordError }, { status: 400 })
   }
 
   const adminClient = createAdminClient()

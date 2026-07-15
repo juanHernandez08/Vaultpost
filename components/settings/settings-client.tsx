@@ -10,13 +10,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import type { User } from '@/lib/types'
-
-function validatePassword(password: string): string | null {
-  if (password.length < 8 || !/[A-Z]/.test(password) || !/[0-9]/.test(password)) {
-    return 'Mínimo 8 caracteres, una mayúscula y un número'
-  }
-  return null
-}
+import { validatePassword } from '@/lib/validation'
 
 interface SettingsClientProps {
   user: User

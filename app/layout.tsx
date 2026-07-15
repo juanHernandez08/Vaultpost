@@ -16,7 +16,7 @@ const geistMono = localFont({
 });
 
 export const metadata: Metadata = {
-  title: 'Pascuas',
+  title: 'Vaultpost',
   description: 'Gestión profesional de redes sociales para agencias',
 };
 

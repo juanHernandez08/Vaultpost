@@ -41,6 +41,30 @@ npm run dev
 | `ENCRYPTION_KEY` | Clave AES-256 para cifrar credenciales sociales |
 | `CRON_SECRET` | Secret para autenticar el cron job de publicación |
 
+## Publicación programada (cron)
+
+El endpoint `/api/cron/publish` publica los posts con `status = 'scheduled'` cuya fecha ya venció. Se autentica con `Authorization: Bearer <CRON_SECRET>`.
+
+- **En Vercel:** `vercel.json` lo programa cada minuto (los crons de Vercel invocan con `GET` y envían el header automáticamente si la variable `CRON_SECRET` está configurada). En el plan Hobby los crons solo corren una vez al día; para frecuencia por minuto se necesita plan Pro.
+- **En local / demo:** se puede disparar manualmente:
+
+```bash
+curl -X POST http://localhost:3000/api/cron/publish -H "Authorization: Bearer $CRON_SECRET"
+```
+
+> Nota: en esta fase el cron marca los posts como `published` sin llamar a las APIs reales de Instagram/Facebook/TikTok (integración prevista para la fase 2).
+
+> ⚠️ **Proyectos gratuitos de Supabase:** se pausan automáticamente tras ~1 semana sin uso y pueden eliminarse tras 90 días. Si el login falla con "No se pudo conectar al servidor", verificá en [supabase.com/dashboard](https://supabase.com/dashboard) que el proyecto siga activo. Si fue eliminado: crear un proyecto nuevo, ejecutar las migraciones (abajo) y actualizar las 3 variables de Supabase en `.env.local`.
+
+## Setup de la base de datos
+
+Ejecutar en orden en el SQL Editor de Supabase:
+
+1. `supabase/migrations/001_schema.sql` — tablas
+2. `supabase/migrations/002_rls.sql` — políticas de seguridad (RLS)
+
+No hace falta seed manual: desde `/login` → "Registrate" → "+ Crear nueva empresa" se crea la primera empresa y su usuario admin. (El `003_seed.sql` queda como alternativa por SQL.)
+
 ## Documentación
 
 - **Spec:** `docs/superpowers/specs/2026-04-03-pascuas-webapp-design.md`
