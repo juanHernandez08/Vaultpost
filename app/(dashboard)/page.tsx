@@ -1,21 +1,14 @@
 import Link from 'next/link'
-import { createClient } from '@/lib/supabase/server'
+import { and, asc, count, eq, gte, inArray } from 'drizzle-orm'
+import { redirect } from 'next/navigation'
+import { db, tables } from '@/lib/db'
+import { getCurrentUser } from '@/lib/auth/user'
+import { visibleClientIds, visibleAccountIds } from '@/lib/db/scope'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Building2, AtSign, Clock, CheckCircle2, PenSquare } from 'lucide-react'
-import type { User } from '@/lib/types'
 
-type UpcomingPost = {
-  id: string
-  content_type: string
-  caption: string | null
-  scheduled_at: string
-  social_account: {
-    platform: string
-    username: string
-    client: { name: string } | null
-  } | null
-}
+export const dynamic = 'force-dynamic'
 
 const PLATFORM_STYLES: Record<string, { bg: string; label: string }> = {
   instagram: { bg: 'bg-gradient-to-br from-purple-500 to-pink-500', label: 'IG' },
@@ -30,108 +23,88 @@ function formatDateTime(iso: string): string {
 }
 
 export default async function DashboardPage() {
-  const supabase = createClient()
+  const profile = await getCurrentUser()
+  if (!profile) redirect('/login')
 
-  const { data: { user: authUser } } = await supabase.auth.getUser()
+  const clientIds = visibleClientIds(profile)
+  const accountIds = visibleAccountIds(profile)
 
-  const { data: profileRaw } = await supabase
-    .from('users')
-    .select('*')
-    .eq('id', authUser?.id ?? '')
-    .single()
+  const clientsCount = clientIds.length
 
-  const profile = profileRaw as User | null
-  const isAdminUser = profile?.role === 'admin'
+  const accountsCount =
+    accountIds.length === 0
+      ? 0
+      : (db
+          .select({ value: count() })
+          .from(tables.social_accounts)
+          .where(
+            and(
+              inArray(tables.social_accounts.id, accountIds),
+              eq(tables.social_accounts.is_active, true)
+            )
+          )
+          .get()?.value ?? 0)
 
-  // Para usuarios no-admin, limitar los contadores a los clientes permitidos
-  let allowedClientIds: string[] | null = null // null = sin restricción (admin)
-  if (!isAdminUser) {
-    allowedClientIds = profile?.permissions?.clients ?? []
+  function postsCount(status: 'scheduled' | 'published'): number {
+    if (accountIds.length === 0) return 0
+    return (
+      db
+        .select({ value: count() })
+        .from(tables.scheduled_posts)
+        .where(
+          and(
+            inArray(tables.scheduled_posts.social_account_id, accountIds),
+            eq(tables.scheduled_posts.status, status)
+          )
+        )
+        .get()?.value ?? 0
+    )
   }
 
-  let allowedAccountIds: string[] | null = null
-  if (allowedClientIds !== null) {
-    if (allowedClientIds.length === 0) {
-      allowedAccountIds = []
-    } else {
-      const { data: accountRows } = await supabase
-        .from('social_accounts')
-        .select('id')
-        .in('client_id', allowedClientIds)
-      allowedAccountIds = (accountRows ?? []).map((a: { id: string }) => a.id)
-    }
-  }
-
-  let clientsQuery = supabase.from('clients').select('*', { count: 'exact', head: true })
-  let accountsQuery = supabase
-    .from('social_accounts')
-    .select('*', { count: 'exact', head: true })
-    .eq('is_active', true)
-  let pendingQuery = supabase
-    .from('scheduled_posts')
-    .select('*', { count: 'exact', head: true })
-    .eq('status', 'scheduled')
-  let publishedQuery = supabase
-    .from('scheduled_posts')
-    .select('*', { count: 'exact', head: true })
-    .eq('status', 'published')
-  let upcomingQuery = supabase
-    .from('scheduled_posts')
-    .select('id, content_type, caption, scheduled_at, social_account:social_accounts(platform, username, client:clients(name))')
-    .eq('status', 'scheduled')
-    .gte('scheduled_at', new Date().toISOString())
-    .order('scheduled_at', { ascending: true })
-    .limit(5)
-
-  if (allowedClientIds !== null) {
-    clientsQuery = clientsQuery.in('id', allowedClientIds)
-    accountsQuery = accountsQuery.in('client_id', allowedClientIds)
-    pendingQuery = pendingQuery.in('social_account_id', allowedAccountIds ?? [])
-    publishedQuery = publishedQuery.in('social_account_id', allowedAccountIds ?? [])
-    upcomingQuery = upcomingQuery.in('social_account_id', allowedAccountIds ?? [])
-  }
-
-  const [clientsResult, accountsResult, pendingResult, publishedResult, upcomingResult] =
-    await Promise.all([clientsQuery, accountsQuery, pendingQuery, publishedQuery, upcomingQuery])
-
-  const queryError =
-    clientsResult.error ??
-    accountsResult.error ??
-    pendingResult.error ??
-    publishedResult.error ??
-    upcomingResult.error
-
-  if (queryError) {
-    console.error('[DashboardPage] Supabase query error:', queryError.message)
-  }
-
-  const upcoming = (upcomingResult.data ?? []) as unknown as UpcomingPost[]
+  const upcoming =
+    accountIds.length === 0
+      ? []
+      : await db.query.scheduled_posts.findMany({
+          where: and(
+            inArray(tables.scheduled_posts.social_account_id, accountIds),
+            eq(tables.scheduled_posts.status, 'scheduled'),
+            gte(tables.scheduled_posts.scheduled_at, new Date().toISOString())
+          ),
+          with: {
+            social_account: {
+              columns: { platform: true, username: true },
+              with: { client: { columns: { name: true } } },
+            },
+          },
+          orderBy: [asc(tables.scheduled_posts.scheduled_at)],
+          limit: 5,
+        })
 
   const stats = [
     {
       label: 'Clientes',
-      value: clientsResult.count ?? 0,
+      value: clientsCount,
       icon: Building2,
       color: 'text-blue-500',
       bg: 'bg-blue-50',
     },
     {
       label: 'Cuentas activas',
-      value: accountsResult.count ?? 0,
+      value: accountsCount,
       icon: AtSign,
       color: 'text-violet-500',
       bg: 'bg-violet-50',
     },
     {
       label: 'Posts pendientes',
-      value: pendingResult.count ?? 0,
+      value: postsCount('scheduled'),
       icon: Clock,
       color: 'text-amber-500',
       bg: 'bg-amber-50',
     },
     {
       label: 'Publicados',
-      value: publishedResult.count ?? 0,
+      value: postsCount('published'),
       icon: CheckCircle2,
       color: 'text-emerald-500',
       bg: 'bg-emerald-50',

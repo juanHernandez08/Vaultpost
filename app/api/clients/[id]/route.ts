@@ -1,6 +1,7 @@
 // app/api/clients/[id]/route.ts
 import { NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
+import { and, eq } from 'drizzle-orm'
+import { db, tables } from '@/lib/db'
 import { requireAdminApi } from '@/lib/api-guard'
 
 export async function PATCH(
@@ -16,21 +17,15 @@ export async function PATCH(
     return NextResponse.json({ error: 'name es requerido' }, { status: 400 })
   }
 
-  // SSR client uses user session — RLS ensures company isolation automatically
-  const supabase = createClient()
-  const { data: client, error } = await supabase
-    .from('clients')
-    .update({ name: name.trim(), logo_url: logo_url?.trim() || null })
-    .eq('id', params.id)
-    .select()
-    .single()
+  const client = db
+    .update(tables.clients)
+    .set({ name: name.trim(), logo_url: logo_url?.trim() || null })
+    .where(and(eq(tables.clients.id, params.id), eq(tables.clients.company_id, guard.user.company_id)))
+    .returning()
+    .get()
 
-  if (error) {
-    if (error.code === 'PGRST116') {
-      return NextResponse.json({ error: 'Cliente no encontrado' }, { status: 404 })
-    }
-    console.error('[PATCH /api/clients/:id]', error.message)
-    return NextResponse.json({ error: error.message }, { status: 500 })
+  if (!client) {
+    return NextResponse.json({ error: 'Cliente no encontrado' }, { status: 404 })
   }
 
   return NextResponse.json({ client })
@@ -43,16 +38,14 @@ export async function DELETE(
   const guard = await requireAdminApi()
   if (guard.error) return guard.error
 
-  // SSR client uses user session — RLS ensures company isolation automatically
-  const supabase = createClient()
-  const { error } = await supabase
-    .from('clients')
-    .delete()
-    .eq('id', params.id)
+  const deleted = db
+    .delete(tables.clients)
+    .where(and(eq(tables.clients.id, params.id), eq(tables.clients.company_id, guard.user.company_id)))
+    .returning({ id: tables.clients.id })
+    .get()
 
-  if (error) {
-    console.error('[DELETE /api/clients/:id]', error.message)
-    return NextResponse.json({ error: error.message }, { status: 500 })
+  if (!deleted) {
+    return NextResponse.json({ error: 'Cliente no encontrado' }, { status: 404 })
   }
 
   return NextResponse.json({ success: true })

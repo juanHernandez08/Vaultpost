@@ -1,27 +1,13 @@
-import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
-import type { User, Company } from '@/lib/types'
+import { getCurrentUserWithCompany, type ProfileWithCompany } from '@/lib/auth/user'
 
-export type ProfileWithCompany = User & { company: Company | null }
+export type { ProfileWithCompany }
 
 export async function requireAdmin(): Promise<ProfileWithCompany> {
-  const supabase = createClient()
+  const profile = await getCurrentUserWithCompany()
 
-  const {
-    data: { user: authUser },
-  } = await supabase.auth.getUser()
-
-  if (!authUser) redirect('/login')
-
-  const { data: profileRaw } = await supabase
-    .from('users')
-    .select('*, company:companies!users_company_id_fkey(*)')
-    .eq('id', authUser.id)
-    .single()
-
-  const profile = profileRaw as ProfileWithCompany | null
-
-  if (!profile || profile.role !== 'admin') redirect('/')
+  if (!profile) redirect('/login')
+  if (profile.role !== 'admin') redirect('/')
 
   return profile
 }

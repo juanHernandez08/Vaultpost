@@ -1,27 +1,36 @@
 // app/api/accounts/route.ts
 import { NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
-import { createAdminClient } from '@/lib/supabase/admin'
+import { and, asc, eq, inArray } from 'drizzle-orm'
+import { db, tables } from '@/lib/db'
 import { requireAdminApi } from '@/lib/api-guard'
+import { companyClientIds } from '@/lib/db/scope'
 import { encrypt } from '@/lib/crypto'
 
-const SAFE_SELECT = 'id, client_id, platform, username, is_active, added_by_id, created_at, client:clients(id, name)'
+// Forma segura: nunca exponer credentials_enc / access_token_enc
+function toSafeAccount(row: typeof tables.social_accounts.$inferSelect, client: { id: string; name: string } | null) {
+  return {
+    id: row.id,
+    client_id: row.client_id,
+    platform: row.platform,
+    username: row.username,
+    is_active: row.is_active,
+    added_by_id: row.added_by_id,
+    created_at: row.created_at,
+    client,
+  }
+}
 
 export async function GET() {
   const guard = await requireAdminApi()
   if (guard.error) return guard.error
 
-  const supabase = createClient()
-  const { data: accounts, error } = await supabase
-    .from('social_accounts')
-    .select(SAFE_SELECT)
-    .order('created_at', { ascending: true })
+  const rows = await db.query.social_accounts.findMany({
+    where: inArray(tables.social_accounts.client_id, companyClientIds(guard.user.company_id)),
+    with: { client: { columns: { id: true, name: true } } },
+    orderBy: [asc(tables.social_accounts.created_at)],
+  })
 
-  if (error) {
-    console.error('[GET /api/accounts]', error.message)
-    return NextResponse.json({ error: error.message }, { status: 500 })
-  }
-
+  const accounts = rows.map((r) => toSafeAccount(r, r.client ?? null))
   return NextResponse.json({ accounts })
 }
 
@@ -45,15 +54,12 @@ export async function POST(request: Request) {
     )
   }
 
-  const adminClient = createAdminClient()
-
   // Verificar que el cliente pertenece a la empresa del admin (evita cross-tenant)
-  const { data: client } = await adminClient
-    .from('clients')
-    .select('id')
-    .eq('id', client_id)
-    .eq('company_id', guard.user.company_id)
-    .single()
+  const client = db
+    .select({ id: tables.clients.id, name: tables.clients.name })
+    .from(tables.clients)
+    .where(and(eq(tables.clients.id, client_id), eq(tables.clients.company_id, guard.user.company_id)))
+    .get()
 
   if (!client) {
     return NextResponse.json({ error: 'Cliente no encontrado' }, { status: 404 })
@@ -61,9 +67,9 @@ export async function POST(request: Request) {
 
   const access_token_enc = access_token?.trim() ? encrypt(access_token.trim()) : null
 
-  const { data: account, error } = await adminClient
-    .from('social_accounts')
-    .insert({
+  const inserted = db
+    .insert(tables.social_accounts)
+    .values({
       client_id,
       platform,
       username: username.trim(),
@@ -71,13 +77,8 @@ export async function POST(request: Request) {
       is_active: true,
       added_by_id: guard.user.id,
     })
-    .select(SAFE_SELECT)
-    .single()
+    .returning()
+    .get()
 
-  if (error) {
-    console.error('[POST /api/accounts]', error.message)
-    return NextResponse.json({ error: error.message }, { status: 500 })
-  }
-
-  return NextResponse.json({ account }, { status: 201 })
+  return NextResponse.json({ account: toSafeAccount(inserted, client) }, { status: 201 })
 }

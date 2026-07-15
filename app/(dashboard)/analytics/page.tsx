@@ -1,55 +1,40 @@
 // app/(dashboard)/analytics/page.tsx
-import { createClient } from '@/lib/supabase/server'
+import { and, desc, eq, inArray } from 'drizzle-orm'
 import { redirect } from 'next/navigation'
+import { db, tables } from '@/lib/db'
+import { getCurrentUser } from '@/lib/auth/user'
+import { visibleAccountIds } from '@/lib/db/scope'
+import { canViewAnalytics } from '@/lib/permissions'
 import { AnalyticsClient } from '@/components/analytics/analytics-client'
-import { canViewAnalytics, canViewClient } from '@/lib/permissions'
-import type { PostMetrics, User } from '@/lib/types'
 
-type PostWithMetrics = {
-  id: string
-  content_type: string
-  caption: string | null
-  scheduled_at: string
-  social_account: {
-    id: string
-    platform: string
-    username: string
-    client_id: string
-    client: { id: string; name: string } | null
-  } | null
-  post_metrics: PostMetrics[]
-}
+export const dynamic = 'force-dynamic'
 
 export default async function AnalyticsPage() {
-  const supabase = createClient()
-
-  const { data: { user: authUser } } = await supabase.auth.getUser()
-  if (!authUser) redirect('/login')
-
-  const { data: profileRaw } = await supabase
-    .from('users').select('*').eq('id', authUser.id).single()
-
-  const profile = profileRaw as User | null
+  const profile = await getCurrentUser()
   if (!profile) redirect('/login')
 
   if (!canViewAnalytics(profile)) redirect('/')
 
-  // Fetch published posts with metrics
-  const { data: rawPosts } = await supabase
-    .from('scheduled_posts')
-    .select('id, content_type, caption, scheduled_at, social_account:social_accounts(id, platform, username, client_id, client:clients(id, name)), post_metrics(*)')
-    .eq('status', 'published')
-    .order('scheduled_at', { ascending: false })
+  const accountIds = visibleAccountIds(profile)
 
-  const allPosts = (rawPosts ?? []) as PostWithMetrics[]
-
-  // Filter by canViewClient for non-admins
-  const posts = profile.role === 'admin'
-    ? allPosts
-    : allPosts.filter((p) => {
-        const clientId = p.social_account?.client_id
-        return clientId ? canViewClient(profile, clientId) : false
-      })
+  const posts =
+    accountIds.length === 0
+      ? []
+      : await db.query.scheduled_posts.findMany({
+          columns: { id: true, content_type: true, caption: true, scheduled_at: true },
+          where: and(
+            inArray(tables.scheduled_posts.social_account_id, accountIds),
+            eq(tables.scheduled_posts.status, 'published')
+          ),
+          with: {
+            social_account: {
+              columns: { id: true, platform: true, username: true, client_id: true },
+              with: { client: { columns: { id: true, name: true } } },
+            },
+            post_metrics: true,
+          },
+          orderBy: [desc(tables.scheduled_posts.scheduled_at)],
+        })
 
   return <AnalyticsClient posts={posts} />
 }

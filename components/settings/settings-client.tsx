@@ -4,7 +4,6 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
-import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -18,7 +17,6 @@ interface SettingsClientProps {
 
 export function SettingsClient({ user }: SettingsClientProps) {
   const router = useRouter()
-  const supabase = createClient()
 
   // Profile section
   const [fullName, setFullName] = useState(user.full_name ?? '')
@@ -37,15 +35,17 @@ export function SettingsClient({ user }: SettingsClientProps) {
     e.preventDefault()
     setProfileLoading(true)
 
-    const { error } = await supabase
-      .from('users')
-      .update({ full_name: fullName.trim() || null })
-      .eq('id', user.id)
+    const res = await fetch('/api/users/me', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ full_name: fullName }),
+    })
 
     setProfileLoading(false)
 
-    if (error) {
-      toast.error(error.message)
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}))
+      toast.error(data.error ?? 'Error al actualizar el perfil')
       return
     }
 
@@ -74,12 +74,17 @@ export function SettingsClient({ user }: SettingsClientProps) {
 
     setPasswordLoading(true)
 
-    const { error } = await supabase.auth.updateUser({ password: newPassword })
+    const res = await fetch('/api/users/me', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ new_password: newPassword }),
+    })
 
     setPasswordLoading(false)
 
-    if (error) {
-      toast.error(error.message)
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}))
+      toast.error(data.error ?? 'Error al cambiar la contraseña')
       return
     }
 

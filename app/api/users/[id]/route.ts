@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
-import { createAdminClient } from '@/lib/supabase/admin'
+import { and, eq } from 'drizzle-orm'
+import { db, tables } from '@/lib/db'
 import { requireAdminApi } from '@/lib/api-guard'
 
 export async function DELETE(
@@ -16,27 +17,18 @@ export async function DELETE(
     )
   }
 
-  const adminClient = createAdminClient()
-
-  // Verify the user belongs to the same company
-  const { data: target } = await adminClient
-    .from('users')
-    .select('id, company_id')
-    .eq('id', params.id)
-    .eq('company_id', guard.user.company_id)
-    .single()
+  // Verificar que el usuario pertenece a la misma empresa
+  const target = db
+    .select({ id: tables.users.id })
+    .from(tables.users)
+    .where(and(eq(tables.users.id, params.id), eq(tables.users.company_id, guard.user.company_id)))
+    .get()
 
   if (!target) {
     return NextResponse.json({ error: 'Usuario no encontrado' }, { status: 404 })
   }
 
-  // Delete from auth.users (ON DELETE CASCADE removes public.users row)
-  const { error } = await adminClient.auth.admin.deleteUser(params.id)
-
-  if (error) {
-    console.error('[DELETE /api/users/:id]', error.message)
-    return NextResponse.json({ error: error.message }, { status: 500 })
-  }
+  db.delete(tables.users).where(eq(tables.users.id, params.id)).run()
 
   return NextResponse.json({ success: true })
 }

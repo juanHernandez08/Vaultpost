@@ -3,7 +3,6 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -38,7 +37,6 @@ export function LoginForm({ companies }: LoginFormProps) {
   const [loading, setLoading] = useState(false)
 
   const router = useRouter()
-  const supabase = createClient()
 
   function handleRegPasswordChange(value: string) {
     setRegPassword(value)
@@ -56,17 +54,21 @@ export function LoginForm({ companies }: LoginFormProps) {
     setLoading(true)
     setError(null)
 
-    const { error } = await supabase.auth.signInWithPassword({ email, password })
+    try {
+      const res = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password }),
+      })
 
-    if (error) {
-      // Los errores de red (proyecto pausado, sin conexión) no son credenciales inválidas
-      const isNetworkError =
-        error.name === 'AuthRetryableFetchError' || /fetch/i.test(error.message ?? '')
-      setError(
-        isNetworkError
-          ? 'No se pudo conectar al servidor. Verificá tu conexión y que el proyecto de Supabase esté activo.'
-          : 'Correo o contraseña incorrectos.'
-      )
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        setError(data.error ?? 'Correo o contraseña incorrectos.')
+        setLoading(false)
+        return
+      }
+    } catch {
+      setError('No se pudo conectar al servidor. Verificá tu conexión.')
       setLoading(false)
       return
     }
@@ -107,18 +109,7 @@ export function LoginForm({ companies }: LoginFormProps) {
       return
     }
 
-    // Auto-login tras registro exitoso
-    const { error: loginError } = await supabase.auth.signInWithPassword({
-      email: regEmail,
-      password: regPassword,
-    })
-
-    if (loginError) {
-      setError('Cuenta creada, pero no se pudo iniciar sesión automáticamente. Intentá iniciar sesión.')
-      setLoading(false)
-      return
-    }
-
+    // El registro exitoso ya deja la sesión iniciada (cookie seteada por el server)
     router.push('/')
     router.refresh()
   }

@@ -1,8 +1,12 @@
 // app/api/auth/register/route.ts
 import { NextResponse } from 'next/server'
-import { createAdminClient } from '@/lib/supabase/admin'
-import type { UserRole } from '@/lib/types'
+import { count, eq } from 'drizzle-orm'
+import bcrypt from 'bcryptjs'
+import { db, tables } from '@/lib/db'
+import { createSession } from '@/lib/auth/session'
+import { toPublicUser } from '@/lib/auth/user'
 import { validatePassword } from '@/lib/validation'
+import type { UserRole } from '@/lib/types'
 
 export async function POST(request: Request) {
   let body: {
@@ -28,121 +32,102 @@ export async function POST(request: Request) {
     )
   }
 
-  // Validar contraseña
   const passwordError = validatePassword(password)
   if (passwordError) {
     return NextResponse.json({ error: passwordError }, { status: 400 })
   }
 
-  const adminClient = createAdminClient()
+  const normalizedEmail = email.trim().toLowerCase()
 
-  let companyId: string
-  let createdCompanyId: string | null = null
-  let role: UserRole
+  // Verificar que el correo no esté en uso
+  const existing = db
+    .select({ id: tables.users.id })
+    .from(tables.users)
+    .where(eq(tables.users.email, normalizedEmail))
+    .get()
 
-  if (company_id) {
-    // Unirse a una empresa existente
-    const { data: company, error: companyError } = await adminClient
-      .from('companies')
-      .select('id')
-      .eq('id', company_id)
-      .single()
-
-    if (companyError || !company) {
-      return NextResponse.json({ error: 'Empresa no encontrada' }, { status: 400 })
-    }
-
-    companyId = company_id
-
-    // Determinar rol: primer usuario de la empresa → admin, resto → custom
-    const { count, error: countError } = await adminClient
-      .from('users')
-      .select('*', { count: 'exact', head: true })
-      .eq('company_id', companyId)
-
-    if (countError) {
-      console.error('[POST /api/auth/register] count users:', countError.message)
-      return NextResponse.json({ error: countError.message }, { status: 500 })
-    }
-
-    role = (count ?? 0) === 0 ? 'admin' : 'custom'
-  } else {
-    // Crear una empresa nueva — quien la crea es su admin
-    const { data: newCompany, error: createCompanyError } = await adminClient
-      .from('companies')
-      .insert({ name: new_company_name!.trim(), plan: 'free' })
-      .select('id')
-      .single()
-
-    if (createCompanyError || !newCompany) {
-      console.error('[POST /api/auth/register] create company:', createCompanyError?.message)
-      return NextResponse.json({ error: 'No se pudo crear la empresa' }, { status: 500 })
-    }
-
-    companyId = newCompany.id
-    createdCompanyId = newCompany.id
-    role = 'admin'
+  if (existing) {
+    return NextResponse.json({ error: 'Ese correo ya está registrado' }, { status: 400 })
   }
 
-  // Rollback de la empresa recién creada si falla algún paso posterior
-  async function rollbackCompany() {
-    if (!createdCompanyId) return
-    const { error } = await adminClient.from('companies').delete().eq('id', createdCompanyId)
-    if (error) {
-      console.error('[POST /api/auth/register] ROLLBACK FAILED — orphaned company:', createdCompanyId, error.message)
-    }
-  }
+  const password_hash = await bcrypt.hash(password, 10)
 
-  // Crear usuario en auth.users
-  const { data: authData, error: authError } = await adminClient.auth.admin.createUser({
-    email: email.trim(),
-    password,
-    email_confirm: true,
-    user_metadata: { full_name: full_name.trim() },
-  })
+  try {
+    // Transacción: empresa (si es nueva) + usuario + owner, todo o nada
+    const user = db.transaction((tx) => {
+      let companyId: string
+      let isNewCompany = false
+      let role: UserRole
 
-  if (authError) {
-    console.error('[POST /api/auth/register] createUser:', authError.message)
-    await rollbackCompany()
-    return NextResponse.json({ error: authError.message }, { status: 400 })
-  }
+      if (company_id) {
+        const company = tx
+          .select({ id: tables.companies.id })
+          .from(tables.companies)
+          .where(eq(tables.companies.id, company_id))
+          .get()
 
-  // Insertar en public.users
-  const { data: user, error: userError } = await adminClient
-    .from('users')
-    .insert({
-      id: authData.user.id,
-      company_id: companyId,
-      email: email.trim(),
-      full_name: full_name.trim(),
-      role,
-      permissions: {},
+        if (!company) throw new RegisterError('Empresa no encontrada', 400)
+        companyId = company.id
+
+        // Primer usuario de la empresa → admin, resto → custom
+        const { value: userCount } = tx
+          .select({ value: count() })
+          .from(tables.users)
+          .where(eq(tables.users.company_id, companyId))
+          .get() ?? { value: 0 }
+
+        role = userCount === 0 ? 'admin' : 'custom'
+      } else {
+        const created = tx
+          .insert(tables.companies)
+          .values({ name: new_company_name!.trim(), plan: 'free' })
+          .returning({ id: tables.companies.id })
+          .get()
+
+        companyId = created.id
+        isNewCompany = true
+        role = 'admin'
+      }
+
+      const inserted = tx
+        .insert(tables.users)
+        .values({
+          company_id: companyId,
+          email: normalizedEmail,
+          password_hash,
+          full_name: full_name!.trim(),
+          role,
+          permissions: {},
+        })
+        .returning()
+        .get()
+
+      if (isNewCompany) {
+        tx.update(tables.companies)
+          .set({ owner_id: inserted.id })
+          .where(eq(tables.companies.id, companyId))
+          .run()
+      }
+
+      return inserted
     })
-    .select()
-    .single()
 
-  if (userError) {
-    // Rollback: eliminar el auth user (y la empresa si se creó recién)
-    const { error: rollbackError } = await adminClient.auth.admin.deleteUser(authData.user.id)
-    if (rollbackError) {
-      console.error('[POST /api/auth/register] ROLLBACK FAILED — orphaned auth user:', authData.user.id, rollbackError.message)
+    // Auto-login: dejar la sesión creada
+    await createSession(user.id)
+
+    return NextResponse.json({ user: toPublicUser(user) }, { status: 201 })
+  } catch (err) {
+    if (err instanceof RegisterError) {
+      return NextResponse.json({ error: err.message }, { status: err.status })
     }
-    await rollbackCompany()
-    console.error('[POST /api/auth/register] insert user:', userError.message)
-    return NextResponse.json({ error: userError.message }, { status: 500 })
+    const msg = err instanceof Error ? err.message : 'Error desconocido'
+    console.error('[POST /api/auth/register]', msg)
+    return NextResponse.json({ error: 'No se pudo crear la cuenta' }, { status: 500 })
   }
+}
 
-  // Registrar al creador como owner de la empresa nueva
-  if (createdCompanyId) {
-    const { error: ownerError } = await adminClient
-      .from('companies')
-      .update({ owner_id: user.id })
-      .eq('id', createdCompanyId)
-    if (ownerError) {
-      // No es fatal: la empresa y el admin ya existen
-      console.error('[POST /api/auth/register] set owner:', ownerError.message)
-    }
+class RegisterError extends Error {
+  constructor(message: string, public status: number) {
+    super(message)
   }
-
-  return NextResponse.json({ user }, { status: 201 })
 }

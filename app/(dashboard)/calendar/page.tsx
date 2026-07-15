@@ -1,47 +1,33 @@
 // app/(dashboard)/calendar/page.tsx
-import { createClient } from '@/lib/supabase/server'
+import { desc, inArray } from 'drizzle-orm'
 import { redirect } from 'next/navigation'
+import { db, tables } from '@/lib/db'
+import { getCurrentUser } from '@/lib/auth/user'
+import { visibleAccountIds } from '@/lib/db/scope'
+import { canSchedule } from '@/lib/permissions'
 import { CalendarClient } from '@/components/calendar/calendar-client'
-import { canSchedule, canViewClient } from '@/lib/permissions'
-import type { ScheduledPost, User } from '@/lib/types'
 
-type PostWithAccount = ScheduledPost & {
-  social_account: {
-    id: string
-    platform: string
-    username: string
-    client_id: string
-    client: { id: string; name: string } | null
-  } | null
-}
+export const dynamic = 'force-dynamic'
 
 export default async function CalendarPage() {
-  const supabase = createClient()
-
-  const { data: { user: authUser } } = await supabase.auth.getUser()
-  if (!authUser) redirect('/login')
-
-  const { data: profileRaw } = await supabase
-    .from('users').select('*').eq('id', authUser.id).single()
-
-  const profile = profileRaw as User | null
+  const profile = await getCurrentUser()
   if (!profile) redirect('/login')
 
-  // Fetch all posts with account + client info (RLS filters by company)
-  const { data: rawPosts } = await supabase
-    .from('scheduled_posts')
-    .select('*, social_account:social_accounts(id, platform, username, client_id, client:clients(id, name))')
-    .order('scheduled_at', { ascending: false })
+  const accountIds = visibleAccountIds(profile)
 
-  const allPosts = (rawPosts ?? []) as PostWithAccount[]
-
-  // Filter by canViewClient for non-admins
-  const posts = profile.role === 'admin'
-    ? allPosts
-    : allPosts.filter((p) => {
-        const clientId = p.social_account?.client_id
-        return clientId ? canViewClient(profile, clientId) : false
-      })
+  const posts =
+    accountIds.length === 0
+      ? []
+      : await db.query.scheduled_posts.findMany({
+          where: inArray(tables.scheduled_posts.social_account_id, accountIds),
+          with: {
+            social_account: {
+              columns: { id: true, platform: true, username: true, client_id: true },
+              with: { client: { columns: { id: true, name: true } } },
+            },
+          },
+          orderBy: [desc(tables.scheduled_posts.scheduled_at)],
+        })
 
   const userCanDelete = canSchedule(profile)
 

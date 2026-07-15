@@ -1,21 +1,23 @@
 // app/(auth)/login/page.tsx
-import { createClient } from '@/lib/supabase/server'
-import { createAdminClient } from '@/lib/supabase/admin'
+import { asc } from 'drizzle-orm'
 import { redirect } from 'next/navigation'
+import { db, tables } from '@/lib/db'
+import { getSessionUserId } from '@/lib/auth/session'
 import { LoginForm } from '@/components/auth/login-form'
+
+export const dynamic = 'force-dynamic'
 
 export default async function LoginPage() {
   // Redirigir si ya hay sesión activa
-  const supabase = createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (user) redirect('/')
+  const userId = await getSessionUserId()
+  if (userId) redirect('/')
 
-  // Fetchar companies con adminClient (sin RLS — lista pública para el registro)
-  const adminClient = createAdminClient()
-  const { data: companies } = await adminClient
-    .from('companies')
-    .select('id, name')
-    .order('name', { ascending: true })
+  // Lista pública de empresas para el selector del registro
+  const companies = db
+    .select({ id: tables.companies.id, name: tables.companies.name })
+    .from(tables.companies)
+    .orderBy(asc(tables.companies.name))
+    .all()
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-zinc-50">
@@ -29,7 +31,7 @@ export default async function LoginPage() {
           <h1 className="text-2xl font-bold tracking-tight text-zinc-900">Vaultpost</h1>
           <p className="mt-1 text-sm text-zinc-500">Gestión de redes sociales</p>
         </div>
-        <LoginForm companies={companies ?? []} />
+        <LoginForm companies={companies} />
       </div>
     </div>
   )
