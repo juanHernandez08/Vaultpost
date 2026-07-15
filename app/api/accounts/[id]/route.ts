@@ -1,7 +1,9 @@
 // app/api/accounts/[id]/route.ts
 import { NextResponse } from 'next/server'
-import { createAdminClient } from '@/lib/supabase/admin'
+import { and, eq, inArray } from 'drizzle-orm'
+import { db, tables } from '@/lib/db'
 import { requireAdminApi } from '@/lib/api-guard'
+import { companyClientIds } from '@/lib/db/scope'
 
 export async function DELETE(
   _request: Request,
@@ -10,31 +12,20 @@ export async function DELETE(
   const guard = await requireAdminApi()
   if (guard.error) return guard.error
 
-  const adminClient = createAdminClient()
+  // Solo cuentas de clientes de la empresa del admin
+  const deleted = db
+    .delete(tables.social_accounts)
+    .where(
+      and(
+        eq(tables.social_accounts.id, params.id),
+        inArray(tables.social_accounts.client_id, companyClientIds(guard.user.company_id))
+      )
+    )
+    .returning({ id: tables.social_accounts.id })
+    .get()
 
-  // Verificar que la cuenta pertenece a un cliente de la empresa del admin
-  const { data: accountRaw } = await adminClient
-    .from('social_accounts')
-    .select('id, client:clients(company_id)')
-    .eq('id', params.id)
-    .single()
-
-  type AccountWithClient = { id: string; client: { company_id: string } | null } | null
-  const account = accountRaw as unknown as AccountWithClient
-  const clientCompanyId = account?.client?.company_id
-
-  if (!accountRaw || clientCompanyId !== guard.user.company_id) {
+  if (!deleted) {
     return NextResponse.json({ error: 'Cuenta no encontrada' }, { status: 404 })
-  }
-
-  const { error } = await adminClient
-    .from('social_accounts')
-    .delete()
-    .eq('id', params.id)
-
-  if (error) {
-    console.error('[DELETE /api/accounts/:id]', error.message)
-    return NextResponse.json({ error: error.message }, { status: 500 })
   }
 
   return NextResponse.json({ success: true })

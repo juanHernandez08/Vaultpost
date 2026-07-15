@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server'
-import { createAdminClient } from '@/lib/supabase/admin'
+import { and, eq } from 'drizzle-orm'
+import { db, tables } from '@/lib/db'
 import { requireAdminApi } from '@/lib/api-guard'
+import { toPublicUser } from '@/lib/auth/user'
 import type { UserPermissions } from '@/lib/types'
 
 export async function PATCH(
@@ -17,23 +19,16 @@ export async function PATCH(
     return NextResponse.json({ error: 'permissions es requerido' }, { status: 400 })
   }
 
-  const adminClient = createAdminClient()
+  const updated = db
+    .update(tables.users)
+    .set({ permissions: permissions as UserPermissions })
+    .where(and(eq(tables.users.id, params.id), eq(tables.users.company_id, guard.user.company_id)))
+    .returning()
+    .get()
 
-  const { data: user, error } = await adminClient
-    .from('users')
-    .update({ permissions: permissions as UserPermissions })
-    .eq('id', params.id)
-    .eq('company_id', guard.user.company_id)
-    .select()
-    .single()
-
-  if (error) {
-    if (error.code === 'PGRST116') {
-      return NextResponse.json({ error: 'Usuario no encontrado' }, { status: 404 })
-    }
-    console.error('[PATCH /api/users/:id/permissions]', error.message)
-    return NextResponse.json({ error: error.message }, { status: 500 })
+  if (!updated) {
+    return NextResponse.json({ error: 'Usuario no encontrado' }, { status: 404 })
   }
 
-  return NextResponse.json({ user })
+  return NextResponse.json({ user: toPublicUser(updated) })
 }

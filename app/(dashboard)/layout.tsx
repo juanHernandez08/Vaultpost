@@ -1,53 +1,46 @@
 // app/(dashboard)/layout.tsx
-import { createClient } from '@/lib/supabase/server'
+import { asc, inArray } from 'drizzle-orm'
 import { redirect } from 'next/navigation'
+import { db, tables } from '@/lib/db'
+import { getCurrentUserWithCompany } from '@/lib/auth/user'
+import { visibleClientIds } from '@/lib/db/scope'
 import { Sidebar } from '@/components/layout/sidebar'
 import { Topbar } from '@/components/layout/topbar'
-import type { SocialAccountWithClient, User, Company } from '@/lib/types'
+import type { SocialAccountWithClient } from '@/lib/types'
+
+export const dynamic = 'force-dynamic'
 
 export default async function DashboardLayout({
   children,
 }: {
   children: React.ReactNode
 }) {
-  const supabase = createClient()
+  const profile = await getCurrentUserWithCompany()
+  if (!profile) redirect('/login')
 
-  const {
-    data: { user: authUser },
-  } = await supabase.auth.getUser()
-
-  if (!authUser) redirect('/login')
-
-  type ProfileWithCompany = User & { company: Company | null }
-
-  const { data: profileRaw } = await supabase
-    .from('users')
-    .select('*, company:companies!users_company_id_fkey(*)')
-    .eq('id', authUser.id)
-    .single()
-
-  const profile = profileRaw as ProfileWithCompany | null
-
-  const { data: rawAccounts } = await supabase
-    .from('social_accounts')
-    .select('*, client:clients(id, name)')
-    .eq('is_active', true)
-    .order('created_at', { ascending: true })
-
-  let accounts = (rawAccounts ?? []) as SocialAccountWithClient[]
-
-  // No-admins solo ven los perfiles de sus clientes asignados
-  if (profile && profile.role !== 'admin') {
-    const allowedClientIds = profile.permissions?.clients ?? []
-    accounts = accounts.filter((a) => allowedClientIds.includes(a.client_id))
-  }
+  // Perfiles visibles: los de los clientes a los que el usuario tiene acceso
+  const clientIds = visibleClientIds(profile)
+  const accounts: SocialAccountWithClient[] =
+    clientIds.length === 0
+      ? []
+      : (
+          await db.query.social_accounts.findMany({
+            // Excluir tokens cifrados: esto se serializa al cliente
+            columns: { credentials_enc: false, access_token_enc: false },
+            where: inArray(tables.social_accounts.client_id, clientIds),
+            with: { client: { columns: { id: true, name: true } } },
+            orderBy: [asc(tables.social_accounts.created_at)],
+          })
+        )
+          .filter((a) => a.is_active)
+          .map((a) => ({ ...a, client: a.client ?? null }))
 
   return (
     <div className="flex h-screen overflow-hidden bg-zinc-50">
       <Sidebar
         accounts={accounts}
-        userRole={profile?.role ?? 'custom'}
-        companyName={profile?.company?.name ?? ''}
+        userRole={profile.role}
+        companyName={profile.company?.name ?? ''}
       />
       <div className="flex flex-1 flex-col overflow-hidden">
         <Topbar user={profile} />

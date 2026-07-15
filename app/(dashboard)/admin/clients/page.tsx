@@ -1,22 +1,23 @@
-import { createClient } from '@/lib/supabase/server'
+import { asc, eq } from 'drizzle-orm'
+import { db, tables } from '@/lib/db'
 import { requireAdmin } from '@/lib/admin-guard'
 import { ClientsClient } from '@/components/admin/clients/clients-client'
-import type { Client, SocialAccount } from '@/lib/types'
 
-type ClientWithAccounts = Client & { social_accounts: SocialAccount[] }
+export const dynamic = 'force-dynamic'
 
 export default async function AdminClientsPage() {
-  await requireAdmin()
-  const supabase = createClient()
+  const profile = await requireAdmin()
 
-  const { data: clients } = await supabase
-    .from('clients')
-    .select('*, social_accounts(*)')
-    .order('name', { ascending: true })
+  const clients = await db.query.clients.findMany({
+    where: eq(tables.clients.company_id, profile.company_id),
+    // Excluir los tokens cifrados: nunca deben serializarse al cliente
+    with: { social_accounts: { columns: { credentials_enc: false, access_token_enc: false } } },
+    orderBy: [asc(tables.clients.name)],
+  })
 
   return (
     <div className="p-6">
-      <ClientsClient initialClients={(clients ?? []) as ClientWithAccounts[]} />
+      <ClientsClient initialClients={clients} />
     </div>
   )
 }

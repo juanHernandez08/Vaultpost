@@ -1,8 +1,10 @@
 // app/api/posts/route.ts
 import { NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
+import { and, desc, eq, inArray } from 'drizzle-orm'
+import { db, tables } from '@/lib/db'
 import { requireAuthApi } from '@/lib/api-guard'
-import { canSchedule, canViewClient } from '@/lib/permissions'
+import { canSchedule } from '@/lib/permissions'
+import { visibleAccountIds } from '@/lib/db/scope'
 import type { PostStatus } from '@/lib/types'
 
 // GET /api/posts — lista posts accesibles al usuario
@@ -15,49 +17,25 @@ export async function GET(request: Request) {
   const accountId = searchParams.get('account_id')
   const status = searchParams.get('status')
 
-  const supabase = createClient()
-
-  let query = supabase
-    .from('scheduled_posts')
-    .select('*, social_account:social_accounts(id, platform, username, client_id, client:clients(id, name))')
-    .order('scheduled_at', { ascending: false })
-
-  if (accountId) query = query.eq('social_account_id', accountId)
-  if (status) query = query.eq('status', status as PostStatus)
-
-  // For non-admin users: pre-filter at DB level by their permitted social accounts
-  // This is defense-in-depth alongside the JS canViewClient filter below
-  if (guard.user.role !== 'admin') {
-    const allowedClientIds: string[] = guard.user.permissions?.clients ?? []
-    if (allowedClientIds.length === 0) {
-      // Non-admin with no assigned clients sees nothing
-      return NextResponse.json({ posts: [] })
-    }
-    // Fetch social account IDs belonging to allowed clients (same user session = RLS applies)
-    const { data: allowedAccounts } = await supabase
-      .from('social_accounts')
-      .select('id')
-      .in('client_id', allowedClientIds)
-    const allowedAccountIds = (allowedAccounts ?? []).map((a: { id: string }) => a.id)
-    if (allowedAccountIds.length === 0) {
-      return NextResponse.json({ posts: [] })
-    }
-    query = query.in('social_account_id', allowedAccountIds)
+  // Scoping por empresa + permisos (reemplaza al RLS de Postgres)
+  const allowedIds = visibleAccountIds(guard.user)
+  if (allowedIds.length === 0) {
+    return NextResponse.json({ posts: [] })
   }
 
-  const { data: postsRaw, error } = await query
+  const conditions = [inArray(tables.scheduled_posts.social_account_id, allowedIds)]
+  if (accountId) conditions.push(eq(tables.scheduled_posts.social_account_id, accountId))
+  if (status) conditions.push(eq(tables.scheduled_posts.status, status as PostStatus))
 
-  if (error) {
-    console.error('[GET /api/posts]', error.message)
-    return NextResponse.json({ error: error.message }, { status: 500 })
-  }
-
-  // Secondary JS filter — belt-and-suspenders (primary filter is DB-level above)
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const posts = (postsRaw ?? []).filter((p: any) => {
-    const clientId = p.social_account?.client_id
-    if (!clientId) return false
-    return canViewClient(guard.user, clientId)
+  const posts = await db.query.scheduled_posts.findMany({
+    where: and(...conditions),
+    with: {
+      social_account: {
+        columns: { id: true, platform: true, username: true, client_id: true },
+        with: { client: { columns: { id: true, name: true } } },
+      },
+    },
+    orderBy: [desc(tables.scheduled_posts.scheduled_at)],
   })
 
   return NextResponse.json({ posts })
@@ -99,42 +77,29 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'status inválido' }, { status: 400 })
   }
 
-  const supabase = createClient()
-
-  // Verificar que la cuenta existe y el usuario puede acceder
-  const { data: accountRaw, error: accountError } = await supabase
-    .from('social_accounts')
-    .select('id, client_id')
-    .eq('id', social_account_id)
-    .single()
-
-  if (accountError || !accountRaw) {
-    return NextResponse.json({ error: 'Cuenta no encontrada' }, { status: 404 })
+  if (isNaN(Date.parse(scheduled_at))) {
+    return NextResponse.json({ error: 'scheduled_at inválido' }, { status: 400 })
   }
 
-  const account = accountRaw as { id: string; client_id: string }
-  if (!canViewClient(guard.user, account.client_id)) {
+  // Verificar que la cuenta existe y el usuario puede acceder
+  const allowedIds = visibleAccountIds(guard.user)
+  if (!allowedIds.includes(social_account_id)) {
     return NextResponse.json({ error: 'Sin acceso a esta cuenta' }, { status: 403 })
   }
 
-  const { data: post, error: insertError } = await supabase
-    .from('scheduled_posts')
-    .insert({
+  const post = db
+    .insert(tables.scheduled_posts)
+    .values({
       social_account_id,
       content_type,
       caption: caption?.trim() || null,
       media_url: media_url?.trim() || null,
-      scheduled_at,
+      scheduled_at: new Date(scheduled_at).toISOString(),
       status,
       created_by_id: guard.user.id,
     })
-    .select()
-    .single()
-
-  if (insertError) {
-    console.error('[POST /api/posts]', insertError.message)
-    return NextResponse.json({ error: insertError.message }, { status: 500 })
-  }
+    .returning()
+    .get()
 
   return NextResponse.json({ post }, { status: 201 })
 }

@@ -1,8 +1,10 @@
 // app/api/posts/[id]/route.ts
 import { NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
+import { eq } from 'drizzle-orm'
+import { db, tables } from '@/lib/db'
 import { requireAuthApi } from '@/lib/api-guard'
-import { canSchedule, canViewClient } from '@/lib/permissions'
+import { canSchedule } from '@/lib/permissions'
+import { visibleAccountIds } from '@/lib/db/scope'
 
 // PATCH /api/posts/[id] — editar post (solo draft | scheduled)
 export async function PATCH(
@@ -24,21 +26,17 @@ export async function PATCH(
     return NextResponse.json({ error: 'Body inválido' }, { status: 400 })
   }
 
-  const supabase = createClient()
+  const post = db
+    .select({ id: tables.scheduled_posts.id, status: tables.scheduled_posts.status, social_account_id: tables.scheduled_posts.social_account_id })
+    .from(tables.scheduled_posts)
+    .where(eq(tables.scheduled_posts.id, params.id))
+    .get()
 
-  const { data: postRaw, error: fetchError } = await supabase
-    .from('scheduled_posts')
-    .select('id, status, social_account:social_accounts(client_id)')
-    .eq('id', params.id)
-    .single()
-
-  if (fetchError || !postRaw) {
+  if (!post) {
     return NextResponse.json({ error: 'Post no encontrado' }, { status: 404 })
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const post = postRaw as any
-  if (!canViewClient(guard.user, post.social_account?.client_id)) {
+  if (!visibleAccountIds(guard.user).includes(post.social_account_id)) {
     return NextResponse.json({ error: 'Sin acceso a este post' }, { status: 403 })
   }
 
@@ -49,16 +47,16 @@ export async function PATCH(
     )
   }
 
-  const VALID_TYPES = ['post', 'reel', 'story', 'video']
+  const VALID_TYPES = ['post', 'reel', 'story', 'video'] as const
 
-  const update: Record<string, unknown> = {}
+  const update: Partial<typeof tables.scheduled_posts.$inferInsert> = {}
   if (body.caption !== undefined) update.caption = body.caption?.trim() || null
   if (body.media_url !== undefined) update.media_url = body.media_url?.trim() || null
   if (body.scheduled_at !== undefined) {
     if (isNaN(Date.parse(body.scheduled_at))) {
       return NextResponse.json({ error: 'scheduled_at inválido' }, { status: 400 })
     }
-    update.scheduled_at = body.scheduled_at
+    update.scheduled_at = new Date(body.scheduled_at).toISOString()
   }
   if (body.content_type !== undefined) {
     if (!VALID_TYPES.includes(body.content_type)) {
@@ -74,24 +72,19 @@ export async function PATCH(
     return NextResponse.json({ error: 'Ningún campo válido para actualizar' }, { status: 400 })
   }
 
-  const { data: updated, error: updateError } = await supabase
-    .from('scheduled_posts')
-    .update(update)
-    .eq('id', params.id)
-    .select()
-    .single()
-
-  if (updateError) {
-    console.error('[PATCH /api/posts/[id]]', updateError.message)
-    return NextResponse.json({ error: updateError.message }, { status: 500 })
-  }
+  const updated = db
+    .update(tables.scheduled_posts)
+    .set(update)
+    .where(eq(tables.scheduled_posts.id, params.id))
+    .returning()
+    .get()
 
   return NextResponse.json({ post: updated })
 }
 
 // DELETE /api/posts/[id] — cancelar/eliminar post
 export async function DELETE(
-  request: Request,
+  _request: Request,
   { params }: { params: { id: string } }
 ) {
   const guard = await requireAuthApi()
@@ -101,21 +94,17 @@ export async function DELETE(
     return NextResponse.json({ error: 'Sin permiso para cancelar posts' }, { status: 403 })
   }
 
-  const supabase = createClient()
+  const post = db
+    .select({ id: tables.scheduled_posts.id, status: tables.scheduled_posts.status, social_account_id: tables.scheduled_posts.social_account_id })
+    .from(tables.scheduled_posts)
+    .where(eq(tables.scheduled_posts.id, params.id))
+    .get()
 
-  const { data: postRaw, error: fetchError } = await supabase
-    .from('scheduled_posts')
-    .select('id, status, social_account:social_accounts(client_id)')
-    .eq('id', params.id)
-    .single()
-
-  if (fetchError || !postRaw) {
+  if (!post) {
     return NextResponse.json({ error: 'Post no encontrado' }, { status: 404 })
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const post = postRaw as any
-  if (!canViewClient(guard.user, post.social_account?.client_id)) {
+  if (!visibleAccountIds(guard.user).includes(post.social_account_id)) {
     return NextResponse.json({ error: 'Sin acceso a este post' }, { status: 403 })
   }
 
@@ -126,15 +115,7 @@ export async function DELETE(
     )
   }
 
-  const { error: deleteError } = await supabase
-    .from('scheduled_posts')
-    .delete()
-    .eq('id', params.id)
-
-  if (deleteError) {
-    console.error('[DELETE /api/posts/[id]]', deleteError.message)
-    return NextResponse.json({ error: deleteError.message }, { status: 500 })
-  }
+  db.delete(tables.scheduled_posts).where(eq(tables.scheduled_posts.id, params.id)).run()
 
   return NextResponse.json({ success: true })
 }
