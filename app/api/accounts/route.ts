@@ -45,9 +45,22 @@ export async function POST(request: Request) {
     )
   }
 
+  const adminClient = createAdminClient()
+
+  // Verificar que el cliente pertenece a la empresa del admin (evita cross-tenant)
+  const { data: client } = await adminClient
+    .from('clients')
+    .select('id')
+    .eq('id', client_id)
+    .eq('company_id', guard.user.company_id)
+    .single()
+
+  if (!client) {
+    return NextResponse.json({ error: 'Cliente no encontrado' }, { status: 404 })
+  }
+
   const access_token_enc = access_token?.trim() ? encrypt(access_token.trim()) : null
 
-  const adminClient = createAdminClient()
   const { data: account, error } = await adminClient
     .from('social_accounts')
     .insert({

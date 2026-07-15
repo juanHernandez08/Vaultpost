@@ -23,10 +23,10 @@ export default async function LoginPage() {
         <div className="text-center">
           <div className="mb-3 flex justify-center">
             <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-zinc-900 text-sm font-bold text-white">
-              OM
+              VP
             </div>
           </div>
-          <h1 className="text-2xl font-bold tracking-tight text-zinc-900">OmniMark</h1>
+          <h1 className="text-2xl font-bold tracking-tight text-zinc-900">Vaultpost</h1>
           <p className="mt-1 text-sm text-zinc-500">Gestión de redes sociales</p>
         </div>
         <LoginForm companies={companies ?? []} />

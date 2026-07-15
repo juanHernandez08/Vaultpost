@@ -2,7 +2,16 @@
 import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 
+// Vercel Cron invoca con GET; POST queda disponible para disparos manuales
+export async function GET(request: Request) {
+  return runPublish(request)
+}
+
 export async function POST(request: Request) {
+  return runPublish(request)
+}
+
+async function runPublish(request: Request) {
   // Authenticate the cron job
   const authHeader = request.headers.get('authorization')
   const cronSecret = process.env.CRON_SECRET

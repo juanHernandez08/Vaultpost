@@ -9,18 +9,12 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { validatePassword } from '@/lib/validation'
 
 type Company = { id: string; name: string }
 
 interface LoginFormProps {
   companies: Company[]
-}
-
-function validatePassword(password: string): string | null {
-  if (password.length < 8 || !/[A-Z]/.test(password) || !/[0-9]/.test(password)) {
-    return 'Mínimo 8 caracteres, una mayúscula y un número'
-  }
-  return null
 }
 
 export function LoginForm({ companies }: LoginFormProps) {
@@ -31,7 +25,10 @@ export function LoginForm({ companies }: LoginFormProps) {
   const [password, setPassword] = useState('')
 
   // Register fields
-  const [companyId, setCompanyId] = useState('')
+  // Si no hay empresas aún, arrancar directo en "crear empresa nueva"
+  const NEW_COMPANY = '__new__'
+  const [companyId, setCompanyId] = useState(companies.length === 0 ? NEW_COMPANY : '')
+  const [newCompanyName, setNewCompanyName] = useState('')
   const [fullName, setFullName] = useState('')
   const [regEmail, setRegEmail] = useState('')
   const [regPassword, setRegPassword] = useState('')
@@ -62,7 +59,14 @@ export function LoginForm({ companies }: LoginFormProps) {
     const { error } = await supabase.auth.signInWithPassword({ email, password })
 
     if (error) {
-      setError('Correo o contraseña incorrectos.')
+      // Los errores de red (proyecto pausado, sin conexión) no son credenciales inválidas
+      const isNetworkError =
+        error.name === 'AuthRetryableFetchError' || /fetch/i.test(error.message ?? '')
+      setError(
+        isNetworkError
+          ? 'No se pudo conectar al servidor. Verificá tu conexión y que el proyecto de Supabase esté activo.'
+          : 'Correo o contraseña incorrectos.'
+      )
       setLoading(false)
       return
     }
@@ -86,7 +90,9 @@ export function LoginForm({ companies }: LoginFormProps) {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        company_id: companyId,
+        ...(companyId === NEW_COMPANY
+          ? { new_company_name: newCompanyName }
+          : { company_id: companyId }),
         full_name: fullName,
         email: regEmail,
         password: regPassword,
@@ -120,6 +126,7 @@ export function LoginForm({ companies }: LoginFormProps) {
   const isRegisterDisabled =
     loading ||
     !companyId ||
+    (companyId === NEW_COMPANY && !newCompanyName.trim()) ||
     !fullName.trim() ||
     !regEmail.trim() ||
     !regPassword ||
@@ -201,9 +208,27 @@ export function LoginForm({ companies }: LoginFormProps) {
                     {c.name}
                   </SelectItem>
                 ))}
+                <SelectItem value={NEW_COMPANY}>+ Crear nueva empresa</SelectItem>
               </SelectContent>
             </Select>
           </div>
+          {companyId === NEW_COMPANY && (
+            <div className="space-y-2">
+              <Label htmlFor="new-company">Nombre de la empresa</Label>
+              <Input
+                id="new-company"
+                type="text"
+                placeholder="Mi Agencia"
+                value={newCompanyName}
+                onChange={(e) => setNewCompanyName(e.target.value)}
+                required
+                disabled={loading}
+              />
+              <p className="text-xs text-zinc-400">
+                Vas a ser el administrador de esta empresa
+              </p>
+            </div>
+          )}
           <div className="space-y-2">
             <Label htmlFor="full-name">Nombre completo</Label>
             <Input

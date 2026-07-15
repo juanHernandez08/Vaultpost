@@ -66,9 +66,20 @@ export function ComposeClient({ accounts }: ComposeClientProps) {
       setError('Seleccioná una cuenta')
       return
     }
-    if (status === 'scheduled' && !scheduledAt) {
-      setError('Ingresá una fecha y hora de publicación')
-      return
+    if (status === 'scheduled') {
+      if (!scheduledAt) {
+        setError('Ingresá una fecha y hora de publicación')
+        return
+      }
+      const when = new Date(scheduledAt)
+      if (isNaN(when.getTime())) {
+        setError('Fecha y hora inválidas')
+        return
+      }
+      if (when.getTime() <= Date.now()) {
+        setError('La fecha de publicación debe ser en el futuro')
+        return
+      }
     }
 
     setLoading(true)
@@ -81,7 +92,9 @@ export function ComposeClient({ accounts }: ComposeClientProps) {
         content_type: contentType,
         caption: caption || null,
         media_url: mediaUrl || null,
-        scheduled_at: status === 'draft' ? new Date().toISOString() : scheduledAt,
+        // datetime-local no incluye zona horaria: convertir a ISO UTC para que
+        // el timestamptz de Postgres guarde el instante correcto
+        scheduled_at: status === 'draft' ? new Date().toISOString() : new Date(scheduledAt).toISOString(),
         status,
       }),
     })

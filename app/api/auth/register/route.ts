@@ -2,30 +2,28 @@
 import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import type { UserRole } from '@/lib/types'
-
-const PASSWORD_ERROR = 'La contraseña debe tener al menos 8 caracteres, una mayúscula y un número'
-
-function validatePassword(password: string): string | null {
-  if (password.length < 8 || !/[A-Z]/.test(password) || !/[0-9]/.test(password)) {
-    return PASSWORD_ERROR
-  }
-  return null
-}
+import { validatePassword } from '@/lib/validation'
 
 export async function POST(request: Request) {
-  let body: { company_id?: string; full_name?: string; email?: string; password?: string }
+  let body: {
+    company_id?: string
+    new_company_name?: string
+    full_name?: string
+    email?: string
+    password?: string
+  }
   try {
     body = await request.json()
   } catch {
     return NextResponse.json({ error: 'Cuerpo de la solicitud inválido' }, { status: 400 })
   }
 
-  const { company_id, full_name, email, password } = body
+  const { company_id, new_company_name, full_name, email, password } = body
 
-  // Validar campos requeridos
-  if (!company_id || !full_name?.trim() || !email?.trim() || !password) {
+  // Validar campos requeridos: empresa existente O nombre de empresa nueva
+  if ((!company_id && !new_company_name?.trim()) || !full_name?.trim() || !email?.trim() || !password) {
     return NextResponse.json(
-      { error: 'company_id, full_name, email y password son requeridos' },
+      { error: 'empresa (existente o nueva), full_name, email y password son requeridos' },
       { status: 400 }
     )
   }
@@ -38,29 +36,62 @@ export async function POST(request: Request) {
 
   const adminClient = createAdminClient()
 
-  // Verificar que la empresa existe
-  const { data: company, error: companyError } = await adminClient
-    .from('companies')
-    .select('id')
-    .eq('id', company_id)
-    .single()
+  let companyId: string
+  let createdCompanyId: string | null = null
+  let role: UserRole
 
-  if (companyError || !company) {
-    return NextResponse.json({ error: 'Empresa no encontrada' }, { status: 400 })
+  if (company_id) {
+    // Unirse a una empresa existente
+    const { data: company, error: companyError } = await adminClient
+      .from('companies')
+      .select('id')
+      .eq('id', company_id)
+      .single()
+
+    if (companyError || !company) {
+      return NextResponse.json({ error: 'Empresa no encontrada' }, { status: 400 })
+    }
+
+    companyId = company_id
+
+    // Determinar rol: primer usuario de la empresa → admin, resto → custom
+    const { count, error: countError } = await adminClient
+      .from('users')
+      .select('*', { count: 'exact', head: true })
+      .eq('company_id', companyId)
+
+    if (countError) {
+      console.error('[POST /api/auth/register] count users:', countError.message)
+      return NextResponse.json({ error: countError.message }, { status: 500 })
+    }
+
+    role = (count ?? 0) === 0 ? 'admin' : 'custom'
+  } else {
+    // Crear una empresa nueva — quien la crea es su admin
+    const { data: newCompany, error: createCompanyError } = await adminClient
+      .from('companies')
+      .insert({ name: new_company_name!.trim(), plan: 'free' })
+      .select('id')
+      .single()
+
+    if (createCompanyError || !newCompany) {
+      console.error('[POST /api/auth/register] create company:', createCompanyError?.message)
+      return NextResponse.json({ error: 'No se pudo crear la empresa' }, { status: 500 })
+    }
+
+    companyId = newCompany.id
+    createdCompanyId = newCompany.id
+    role = 'admin'
   }
 
-  // Determinar rol: primer usuario de la empresa → admin, resto → custom
-  const { count, error: countError } = await adminClient
-    .from('users')
-    .select('*', { count: 'exact', head: true })
-    .eq('company_id', company_id)
-
-  if (countError) {
-    console.error('[POST /api/auth/register] count users:', countError.message)
-    return NextResponse.json({ error: countError.message }, { status: 500 })
+  // Rollback de la empresa recién creada si falla algún paso posterior
+  async function rollbackCompany() {
+    if (!createdCompanyId) return
+    const { error } = await adminClient.from('companies').delete().eq('id', createdCompanyId)
+    if (error) {
+      console.error('[POST /api/auth/register] ROLLBACK FAILED — orphaned company:', createdCompanyId, error.message)
+    }
   }
-
-  const role: UserRole = (count ?? 0) === 0 ? 'admin' : 'custom'
 
   // Crear usuario en auth.users
   const { data: authData, error: authError } = await adminClient.auth.admin.createUser({
@@ -72,6 +103,7 @@ export async function POST(request: Request) {
 
   if (authError) {
     console.error('[POST /api/auth/register] createUser:', authError.message)
+    await rollbackCompany()
     return NextResponse.json({ error: authError.message }, { status: 400 })
   }
 
@@ -80,7 +112,7 @@ export async function POST(request: Request) {
     .from('users')
     .insert({
       id: authData.user.id,
-      company_id,
+      company_id: companyId,
       email: email.trim(),
       full_name: full_name.trim(),
       role,
@@ -90,13 +122,26 @@ export async function POST(request: Request) {
     .single()
 
   if (userError) {
-    // Rollback: eliminar el auth user
+    // Rollback: eliminar el auth user (y la empresa si se creó recién)
     const { error: rollbackError } = await adminClient.auth.admin.deleteUser(authData.user.id)
     if (rollbackError) {
       console.error('[POST /api/auth/register] ROLLBACK FAILED — orphaned auth user:', authData.user.id, rollbackError.message)
     }
+    await rollbackCompany()
     console.error('[POST /api/auth/register] insert user:', userError.message)
     return NextResponse.json({ error: userError.message }, { status: 500 })
+  }
+
+  // Registrar al creador como owner de la empresa nueva
+  if (createdCompanyId) {
+    const { error: ownerError } = await adminClient
+      .from('companies')
+      .update({ owner_id: user.id })
+      .eq('id', createdCompanyId)
+    if (ownerError) {
+      // No es fatal: la empresa y el admin ya existen
+      console.error('[POST /api/auth/register] set owner:', ownerError.message)
+    }
   }
 
   return NextResponse.json({ user }, { status: 201 })

@@ -70,6 +70,10 @@ export async function PATCH(
     update.status = body.status
   }
 
+  if (Object.keys(update).length === 0) {
+    return NextResponse.json({ error: 'Ningún campo válido para actualizar' }, { status: 400 })
+  }
+
   const { data: updated, error: updateError } = await supabase
     .from('scheduled_posts')
     .update(update)

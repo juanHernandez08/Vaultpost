@@ -69,7 +69,7 @@ export function Sidebar({ accounts, userRole, companyName }: SidebarProps) {
       {/* Logo */}
       <div className="flex h-16 items-center gap-3 border-b border-zinc-200 px-5">
         <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg bg-zinc-900 text-xs font-bold text-white">
-          OM
+          VP
         </div>
         <span className="truncate text-base font-bold text-zinc-900">{companyName}</span>
       </div>
