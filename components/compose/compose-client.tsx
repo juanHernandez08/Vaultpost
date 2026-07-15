@@ -39,6 +39,7 @@ export function ComposeClient({ accounts }: ComposeClientProps) {
   const [contentType, setContentType] = useState<string>('post')
   const [caption, setCaption] = useState('')
   const [mediaUrl, setMediaUrl] = useState('')
+  const [uploading, setUploading] = useState(false)
   const [scheduledAt, setScheduledAt] = useState('')
   const [status, setStatus] = useState<'scheduled' | 'draft'>('scheduled')
   const [loading, setLoading] = useState(false)
@@ -56,6 +57,33 @@ export function ComposeClient({ accounts }: ComposeClientProps) {
     setStatus('scheduled')
     setError(null)
     setSuccess(false)
+  }
+
+  async function handleFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    setUploading(true)
+    setError(null)
+
+    const form = new FormData()
+    form.append('file', file)
+
+    try {
+      const res = await fetch('/api/upload', { method: 'POST', body: form })
+      const data = await res.json()
+      if (!res.ok) {
+        setError(data.error ?? 'Error al subir la imagen')
+        return
+      }
+      setMediaUrl(data.url)
+      toast.success('Imagen subida')
+    } catch {
+      setError('No se pudo subir la imagen')
+    } finally {
+      setUploading(false)
+      e.target.value = ''
+    }
   }
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
@@ -224,16 +252,42 @@ export function ComposeClient({ accounts }: ComposeClientProps) {
               />
             </div>
 
-            {/* Media URL */}
+            {/* Media: subir imagen o URL externa */}
             <div className="space-y-2">
-              <Label htmlFor="media-url">URL de media (opcional)</Label>
+              <Label htmlFor="media-file">Imagen (JPEG, máx. 8 MB)</Label>
+              <Input
+                id="media-file"
+                type="file"
+                accept="image/jpeg"
+                onChange={handleFileUpload}
+                disabled={loading || uploading}
+              />
+              {uploading && <p className="text-xs text-zinc-400">Subiendo imagen...</p>}
+              {mediaUrl && (
+                <div className="flex items-center gap-3">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={mediaUrl}
+                    alt="Vista previa"
+                    className="h-20 w-20 rounded-md border border-zinc-200 object-cover"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setMediaUrl('')}
+                    className="text-xs text-red-500 underline underline-offset-4"
+                    disabled={loading}
+                  >
+                    Quitar imagen
+                  </button>
+                </div>
+              )}
               <Input
                 id="media-url"
                 type="url"
-                placeholder="https://..."
-                value={mediaUrl}
+                placeholder="...o pegá una URL pública https://"
+                value={mediaUrl.startsWith('/api/media/') ? '' : mediaUrl}
                 onChange={(e) => setMediaUrl(e.target.value)}
-                disabled={loading}
+                disabled={loading || mediaUrl.startsWith('/api/media/')}
               />
             </div>
 
