@@ -61,7 +61,26 @@ curl -X POST http://localhost:3000/api/cron/publish -H "Authorization: Bearer $C
 
 Para automatizarlo en local se puede usar el Programador de tareas de Windows o un cron de sistema.
 
-> Nota: en esta fase el cron marca los posts como `published` sin llamar a las APIs reales de Instagram/Facebook/TikTok (integración prevista para la fase 2).
+> Las cuentas de Instagram **con access token** publican de verdad vía la API de Meta; las cuentas sin token (y Facebook/TikTok) se marcan como `published` en modo simulación.
+
+## Publicar de verdad en Instagram
+
+Requisitos de Meta para publicar por API:
+
+1. **Cuenta profesional**: en la app de Instagram → Configuración → Tipo de cuenta → cambiar a Empresa o Creador (gratis).
+2. **App de Meta**: en [developers.facebook.com](https://developers.facebook.com/) → Crear app → caso de uso con **"API de Instagram"** (login de Instagram Business). En *API setup with Instagram business login* agregá tu cuenta y generá un **access token** (permisos `instagram_business_basic` + `instagram_business_content_publish`).
+3. **URL pública para las imágenes**: Meta descarga la imagen desde una URL — tu PC no es pública, así que corré un túnel:
+   ```bash
+   ngrok http 3000        # o: cloudflared tunnel --url http://localhost:3000
+   ```
+   y poné la URL que te da en `.env.local`:
+   ```
+   PUBLIC_BASE_URL=https://xxxx.ngrok-free.app
+   ```
+4. En Vaultpost: **Admin → Cuentas → Agregar cuenta** → plataforma Instagram, tu username y el access token (se guarda cifrado).
+5. **Nuevo Post** → elegí la cuenta, tipo **Story**, subí tu imagen (JPEG), programá la fecha → cuando el cron corra (o lo dispares con el `curl` de arriba), la historia aparece en tu Instagram.
+
+Limitaciones actuales: imágenes JPEG solamente (requisito de Meta para `image_url`); videos/reels quedan para la fase 2. Los tokens de prueba de Meta duran 60 días.
 
 ## Deploy
 
