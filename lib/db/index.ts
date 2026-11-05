@@ -1,14 +1,14 @@
 // lib/db/index.ts
-// Cliente SQLite (better-sqlite3) + Drizzle. La base es un archivo local en
-// data/vaultpost.db — se crea y migra sola en el primer arranque.
-import Database from 'better-sqlite3'
-import { drizzle } from 'drizzle-orm/better-sqlite3'
-import path from 'path'
-import fs from 'fs'
+// Cliente PostgreSQL (node-postgres) + Drizzle. La conexión se toma de
+// DATABASE_URL; las tablas se crean solas en el primer arranque.
+import { Pool, Client } from 'pg'
+import { drizzle } from 'drizzle-orm/node-postgres'
 import * as schema from './schema'
 
-const DB_PATH =
-  process.env.DATABASE_PATH ?? path.join(process.cwd(), 'data', 'vaultpost.db')
+const DATABASE_URL = process.env.DATABASE_URL
+if (!DATABASE_URL) {
+  throw new Error('Falta DATABASE_URL en el entorno (ver .env.example)')
+}
 
 const BOOTSTRAP_SQL = `
 CREATE TABLE IF NOT EXISTS companies (
@@ -26,7 +26,7 @@ CREATE TABLE IF NOT EXISTS users (
   password_hash  TEXT NOT NULL,
   full_name      TEXT,
   role           TEXT NOT NULL DEFAULT 'custom' CHECK (role IN ('admin', 'custom')),
-  permissions    TEXT NOT NULL DEFAULT '{}',
+  permissions    JSONB NOT NULL DEFAULT '{}'::jsonb,
   created_at     TEXT NOT NULL
 );
 
@@ -46,7 +46,7 @@ CREATE TABLE IF NOT EXISTS social_accounts (
   credentials_enc   TEXT,
   access_token_enc  TEXT,
   last_sync         TEXT,
-  is_active         INTEGER NOT NULL DEFAULT 1,
+  is_active         BOOLEAN NOT NULL DEFAULT TRUE,
   added_by_id       TEXT,
   created_at        TEXT NOT NULL
 );
@@ -72,7 +72,7 @@ CREATE TABLE IF NOT EXISTS post_metrics (
   comments           INTEGER NOT NULL DEFAULT 0,
   shares             INTEGER NOT NULL DEFAULT 0,
   reach              INTEGER NOT NULL DEFAULT 0,
-  engagement_rate    REAL NOT NULL DEFAULT 0,
+  engagement_rate    DOUBLE PRECISION NOT NULL DEFAULT 0,
   fetched_at         TEXT NOT NULL
 );
 
@@ -84,13 +84,34 @@ CREATE INDEX IF NOT EXISTS idx_posts_status_at ON scheduled_posts(status, schedu
 CREATE INDEX IF NOT EXISTS idx_metrics_post ON post_metrics(scheduled_post_id);
 `
 
-function createDb() {
-  fs.mkdirSync(path.dirname(DB_PATH), { recursive: true })
-  const sqlite = new Database(DB_PATH)
-  sqlite.pragma('journal_mode = WAL')
-  sqlite.pragma('foreign_keys = ON')
-  sqlite.exec(BOOTSTRAP_SQL)
-  return drizzle(sqlite, { schema })
+// Crea las tablas con una conexión dedicada (fuera del pool) para que el
+// pool pueda esperar a que termine antes de atender la primera consulta.
+async function bootstrap(connectionString: string) {
+  const client = new Client({ connectionString })
+  await client.connect()
+  try {
+    await client.query(BOOTSTRAP_SQL)
+  } finally {
+    await client.end()
+  }
+}
+
+function createDb(connectionString: string) {
+  const pool = new Pool({ connectionString })
+  const ready = bootstrap(connectionString).catch((err) => {
+    console.error('[db] No se pudo inicializar el schema:', err)
+    throw err
+  })
+
+  // Toda consulta del pool (directa o vía transacción) espera al bootstrap.
+  const query = pool.query.bind(pool)
+  const connect = pool.connect.bind(pool)
+  pool.query = ((...args: Parameters<typeof query>) =>
+    ready.then(() => query(...args))) as typeof pool.query
+  pool.connect = ((...args: Parameters<typeof connect>) =>
+    ready.then(() => connect(...args))) as typeof pool.connect
+
+  return drizzle(pool, { schema })
 }
 
 // Singleton: sobrevive a los hot-reloads del dev server de Next
@@ -98,6 +119,9 @@ const globalForDb = globalThis as unknown as {
   __vaultpostDb?: ReturnType<typeof createDb>
 }
 
-export const db = globalForDb.__vaultpostDb ?? (globalForDb.__vaultpostDb = createDb())
+export const db = globalForDb.__vaultpostDb ?? (globalForDb.__vaultpostDb = createDb(DATABASE_URL))
+
+/** Primera fila de un resultado (equivalente al `.get()` de SQLite). */
+export const first = <T>(rows: T[]): T | undefined => rows[0]
 
 export * as tables from './schema'

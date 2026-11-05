@@ -18,7 +18,7 @@ export async function GET(request: Request) {
   const status = searchParams.get('status')
 
   // Scoping por empresa + permisos (reemplaza al RLS de Postgres)
-  const allowedIds = visibleAccountIds(guard.user)
+  const allowedIds = await visibleAccountIds(guard.user)
   if (allowedIds.length === 0) {
     return NextResponse.json({ posts: [] })
   }
@@ -82,12 +82,12 @@ export async function POST(request: Request) {
   }
 
   // Verificar que la cuenta existe y el usuario puede acceder
-  const allowedIds = visibleAccountIds(guard.user)
+  const allowedIds = await visibleAccountIds(guard.user)
   if (!allowedIds.includes(social_account_id)) {
     return NextResponse.json({ error: 'Sin acceso a esta cuenta' }, { status: 403 })
   }
 
-  const post = db
+  const [post] = await db
     .insert(tables.scheduled_posts)
     .values({
       social_account_id,
@@ -99,7 +99,6 @@ export async function POST(request: Request) {
       created_by_id: guard.user.id,
     })
     .returning()
-    .get()
 
   return NextResponse.json({ post }, { status: 201 })
 }

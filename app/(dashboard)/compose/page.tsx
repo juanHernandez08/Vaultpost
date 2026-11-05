@@ -11,11 +11,11 @@ export const dynamic = 'force-dynamic'
 
 export default async function ComposePage() {
   const profile = await getCurrentUser()
-  if (!profile) redirect('/login')
+  if (!profile) redirect('/api/auth/logout')
 
   if (!canSchedule(profile)) redirect('/')
 
-  const clientIds = visibleClientIds(profile)
+  const clientIds = await visibleClientIds(profile)
   const accounts: SocialAccountWithClient[] =
     clientIds.length === 0
       ? []

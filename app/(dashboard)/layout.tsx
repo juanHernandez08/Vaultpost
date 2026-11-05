@@ -16,10 +16,10 @@ export default async function DashboardLayout({
   children: React.ReactNode
 }) {
   const profile = await getCurrentUserWithCompany()
-  if (!profile) redirect('/login')
+  if (!profile) redirect('/api/auth/logout')
 
   // Perfiles visibles: los de los clientes a los que el usuario tiene acceso
-  const clientIds = visibleClientIds(profile)
+  const clientIds = await visibleClientIds(profile)
   const accounts: SocialAccountWithClient[] =
     clientIds.length === 0
       ? []

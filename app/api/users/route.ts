@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { asc, eq } from 'drizzle-orm'
 import bcrypt from 'bcryptjs'
-import { db, tables } from '@/lib/db'
+import { db, first, tables } from '@/lib/db'
 import { requireAdminApi } from '@/lib/api-guard'
 import { toPublicUser } from '@/lib/auth/user'
 import { validatePassword } from '@/lib/validation'
@@ -11,12 +11,11 @@ export async function GET() {
   const guard = await requireAdminApi()
   if (guard.error) return guard.error
 
-  const rows = db
+  const rows = await db
     .select()
     .from(tables.users)
     .where(eq(tables.users.company_id, guard.user.company_id))
     .orderBy(asc(tables.users.created_at))
-    .all()
 
   return NextResponse.json({ users: rows.map(toPublicUser) })
 }
@@ -46,11 +45,11 @@ export async function POST(request: Request) {
 
   const normalizedEmail = email.trim().toLowerCase()
 
-  const existing = db
+  const existing = await db
     .select({ id: tables.users.id })
     .from(tables.users)
     .where(eq(tables.users.email, normalizedEmail))
-    .get()
+    .then(first)
 
   if (existing) {
     return NextResponse.json({ error: 'Ese correo ya está registrado' }, { status: 400 })
@@ -58,7 +57,7 @@ export async function POST(request: Request) {
 
   const password_hash = await bcrypt.hash(password, 10)
 
-  const inserted = db
+  const [inserted] = await db
     .insert(tables.users)
     .values({
       company_id: guard.user.company_id,
@@ -69,7 +68,6 @@ export async function POST(request: Request) {
       permissions: {},
     })
     .returning()
-    .get()
 
   return NextResponse.json({ user: toPublicUser(inserted) }, { status: 201 })
 }

@@ -1,14 +1,14 @@
 // lib/db/schema.ts
-// Schema de Drizzle para SQLite. Los nombres de propiedad son snake_case a
+// Schema de Drizzle para PostgreSQL. Los nombres de propiedad son snake_case a
 // propósito: coinciden con los tipos de lib/types.ts que consume toda la UI.
-import { sqliteTable, text, integer, real } from 'drizzle-orm/sqlite-core'
+import { pgTable, text, integer, boolean, jsonb, doublePrecision } from 'drizzle-orm/pg-core'
 import { relations } from 'drizzle-orm'
 import type { UserPermissions } from '@/lib/types'
 
 const uuid = () => crypto.randomUUID()
 const nowIso = () => new Date().toISOString()
 
-export const companies = sqliteTable('companies', {
+export const companies = pgTable('companies', {
   id: text('id').primaryKey().$defaultFn(uuid),
   name: text('name').notNull(),
   owner_id: text('owner_id'),
@@ -16,7 +16,7 @@ export const companies = sqliteTable('companies', {
   created_at: text('created_at').notNull().$defaultFn(nowIso),
 })
 
-export const users = sqliteTable('users', {
+export const users = pgTable('users', {
   id: text('id').primaryKey().$defaultFn(uuid),
   company_id: text('company_id')
     .notNull()
@@ -25,14 +25,14 @@ export const users = sqliteTable('users', {
   password_hash: text('password_hash').notNull(),
   full_name: text('full_name'),
   role: text('role', { enum: ['admin', 'custom'] }).notNull().default('custom'),
-  permissions: text('permissions', { mode: 'json' })
+  permissions: jsonb('permissions')
     .$type<UserPermissions>()
     .notNull()
     .default({}),
   created_at: text('created_at').notNull().$defaultFn(nowIso),
 })
 
-export const clients = sqliteTable('clients', {
+export const clients = pgTable('clients', {
   id: text('id').primaryKey().$defaultFn(uuid),
   company_id: text('company_id')
     .notNull()
@@ -42,7 +42,7 @@ export const clients = sqliteTable('clients', {
   created_at: text('created_at').notNull().$defaultFn(nowIso),
 })
 
-export const social_accounts = sqliteTable('social_accounts', {
+export const social_accounts = pgTable('social_accounts', {
   id: text('id').primaryKey().$defaultFn(uuid),
   client_id: text('client_id')
     .notNull()
@@ -52,12 +52,12 @@ export const social_accounts = sqliteTable('social_accounts', {
   credentials_enc: text('credentials_enc'),
   access_token_enc: text('access_token_enc'),
   last_sync: text('last_sync'),
-  is_active: integer('is_active', { mode: 'boolean' }).notNull().default(true),
+  is_active: boolean('is_active').notNull().default(true),
   added_by_id: text('added_by_id'),
   created_at: text('created_at').notNull().$defaultFn(nowIso),
 })
 
-export const scheduled_posts = sqliteTable('scheduled_posts', {
+export const scheduled_posts = pgTable('scheduled_posts', {
   id: text('id').primaryKey().$defaultFn(uuid),
   social_account_id: text('social_account_id')
     .notNull()
@@ -76,7 +76,7 @@ export const scheduled_posts = sqliteTable('scheduled_posts', {
   created_at: text('created_at').notNull().$defaultFn(nowIso),
 })
 
-export const post_metrics = sqliteTable('post_metrics', {
+export const post_metrics = pgTable('post_metrics', {
   id: text('id').primaryKey().$defaultFn(uuid),
   scheduled_post_id: text('scheduled_post_id')
     .notNull()
@@ -85,7 +85,7 @@ export const post_metrics = sqliteTable('post_metrics', {
   comments: integer('comments').notNull().default(0),
   shares: integer('shares').notNull().default(0),
   reach: integer('reach').notNull().default(0),
-  engagement_rate: real('engagement_rate').notNull().default(0),
+  engagement_rate: doublePrecision('engagement_rate').notNull().default(0),
   fetched_at: text('fetched_at').notNull().$defaultFn(nowIso),
 })
 

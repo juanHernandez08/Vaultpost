@@ -1,7 +1,7 @@
 // app/api/accounts/route.ts
 import { NextResponse } from 'next/server'
 import { and, asc, eq, inArray } from 'drizzle-orm'
-import { db, tables } from '@/lib/db'
+import { db, first, tables } from '@/lib/db'
 import { requireAdminApi } from '@/lib/api-guard'
 import { companyClientIds } from '@/lib/db/scope'
 import { encrypt } from '@/lib/crypto'
@@ -55,11 +55,11 @@ export async function POST(request: Request) {
   }
 
   // Verificar que el cliente pertenece a la empresa del admin (evita cross-tenant)
-  const client = db
+  const client = await db
     .select({ id: tables.clients.id, name: tables.clients.name })
     .from(tables.clients)
     .where(and(eq(tables.clients.id, client_id), eq(tables.clients.company_id, guard.user.company_id)))
-    .get()
+    .then(first)
 
   if (!client) {
     return NextResponse.json({ error: 'Cliente no encontrado' }, { status: 404 })
@@ -67,7 +67,7 @@ export async function POST(request: Request) {
 
   const access_token_enc = access_token?.trim() ? encrypt(access_token.trim()) : null
 
-  const inserted = db
+  const [inserted] = await db
     .insert(tables.social_accounts)
     .values({
       client_id,
@@ -78,7 +78,6 @@ export async function POST(request: Request) {
       added_by_id: guard.user.id,
     })
     .returning()
-    .get()
 
   return NextResponse.json({ account: toSafeAccount(inserted, client) }, { status: 201 })
 }

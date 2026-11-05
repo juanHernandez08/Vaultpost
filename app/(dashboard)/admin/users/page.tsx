@@ -9,20 +9,18 @@ export const dynamic = 'force-dynamic'
 export default async function AdminUsersPage() {
   const profile = await requireAdmin()
 
-  const users = db
+  const users = await db
     .select()
     .from(tables.users)
     .where(eq(tables.users.company_id, profile.company_id))
     .orderBy(asc(tables.users.created_at))
-    .all()
-    .map(toPublicUser)
+    .then((rows) => rows.map(toPublicUser))
 
-  const clients = db
+  const clients = await db
     .select()
     .from(tables.clients)
     .where(eq(tables.clients.company_id, profile.company_id))
     .orderBy(asc(tables.clients.name))
-    .all()
 
   return (
     <div className="p-6">

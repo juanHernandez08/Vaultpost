@@ -2,7 +2,7 @@
 import { NextResponse } from 'next/server'
 import { count, eq } from 'drizzle-orm'
 import bcrypt from 'bcryptjs'
-import { db, tables } from '@/lib/db'
+import { db, first, tables } from '@/lib/db'
 import { createSession } from '@/lib/auth/session'
 import { toPublicUser } from '@/lib/auth/user'
 import { validatePassword } from '@/lib/validation'
@@ -40,11 +40,11 @@ export async function POST(request: Request) {
   const normalizedEmail = email.trim().toLowerCase()
 
   // Verificar que el correo no esté en uso
-  const existing = db
+  const existing = await db
     .select({ id: tables.users.id })
     .from(tables.users)
     .where(eq(tables.users.email, normalizedEmail))
-    .get()
+    .then(first)
 
   if (existing) {
     return NextResponse.json({ error: 'Ese correo ya está registrado' }, { status: 400 })
@@ -54,42 +54,41 @@ export async function POST(request: Request) {
 
   try {
     // Transacción: empresa (si es nueva) + usuario + owner, todo o nada
-    const user = db.transaction((tx) => {
+    const user = await db.transaction(async (tx) => {
       let companyId: string
       let isNewCompany = false
       let role: UserRole
 
       if (company_id) {
-        const company = tx
+        const company = await tx
           .select({ id: tables.companies.id })
           .from(tables.companies)
           .where(eq(tables.companies.id, company_id))
-          .get()
+          .then(first)
 
         if (!company) throw new RegisterError('Empresa no encontrada', 400)
         companyId = company.id
 
         // Primer usuario de la empresa → admin, resto → custom
-        const { value: userCount } = tx
+        const { value: userCount } = (await tx
           .select({ value: count() })
           .from(tables.users)
           .where(eq(tables.users.company_id, companyId))
-          .get() ?? { value: 0 }
+          .then(first)) ?? { value: 0 }
 
         role = userCount === 0 ? 'admin' : 'custom'
       } else {
-        const created = tx
+        const [created] = await tx
           .insert(tables.companies)
           .values({ name: new_company_name!.trim(), plan: 'free' })
           .returning({ id: tables.companies.id })
-          .get()
 
         companyId = created.id
         isNewCompany = true
         role = 'admin'
       }
 
-      const inserted = tx
+      const [inserted] = await tx
         .insert(tables.users)
         .values({
           company_id: companyId,
@@ -100,13 +99,12 @@ export async function POST(request: Request) {
           permissions: {},
         })
         .returning()
-        .get()
 
       if (isNewCompany) {
-        tx.update(tables.companies)
+        await tx
+          .update(tables.companies)
           .set({ owner_id: inserted.id })
           .where(eq(tables.companies.id, companyId))
-          .run()
       }
 
       return inserted

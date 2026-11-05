@@ -11,11 +11,11 @@ export const dynamic = 'force-dynamic'
 
 export default async function AnalyticsPage() {
   const profile = await getCurrentUser()
-  if (!profile) redirect('/login')
+  if (!profile) redirect('/api/auth/logout')
 
   if (!canViewAnalytics(profile)) redirect('/')
 
-  const accountIds = visibleAccountIds(profile)
+  const accountIds = await visibleAccountIds(profile)
 
   const posts =
     accountIds.length === 0

@@ -2,7 +2,7 @@
 import { NextResponse } from 'next/server'
 import { eq } from 'drizzle-orm'
 import bcrypt from 'bcryptjs'
-import { db, tables } from '@/lib/db'
+import { db, first, tables } from '@/lib/db'
 import { createSession } from '@/lib/auth/session'
 import { toPublicUser } from '@/lib/auth/user'
 
@@ -19,11 +19,11 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'email y password son requeridos' }, { status: 400 })
   }
 
-  const row = db
+  const row = await db
     .select()
     .from(tables.users)
     .where(eq(tables.users.email, email.trim().toLowerCase()))
-    .get()
+    .then(first)
 
   // Comparar siempre contra un hash (aunque el usuario no exista) para no
   // filtrar por timing qué correos están registrados

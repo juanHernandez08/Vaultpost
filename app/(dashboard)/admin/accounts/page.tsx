@@ -18,12 +18,11 @@ export default async function AdminAccountsPage() {
     orderBy: [asc(tables.social_accounts.created_at)],
   })
 
-  const clients = db
+  const clients = await db
     .select()
     .from(tables.clients)
     .where(eq(tables.clients.company_id, profile.company_id))
     .orderBy(asc(tables.clients.name))
-    .all()
 
   return (
     <div className="p-6">

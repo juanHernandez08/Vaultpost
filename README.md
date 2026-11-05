@@ -8,7 +8,7 @@ Webapp SaaS para agencias y Community Managers que centraliza **20+ cuentas** de
 |------|-----------|
 | Frontend + Backend | Next.js 14 (App Router) + TypeScript |
 | Estilos | Tailwind CSS + shadcn/ui |
-| Base de datos | SQLite local (better-sqlite3 + Drizzle ORM) — **100% gratis, sin servicios externos** |
+| Base de datos | PostgreSQL (node-postgres + Drizzle ORM) |
 | Autenticación | Sesiones propias: bcrypt + JWT (jose) en cookie httpOnly |
 | Cifrado | AES-256-GCM para tokens de redes sociales |
 | Publicación programada | Endpoint cron autenticado con `CRON_SECRET` |
@@ -21,18 +21,24 @@ Webapp SaaS para agencias y Community Managers que centraliza **20+ cuentas** de
 - 📱 Selector de perfiles: Instagram, Facebook y TikTok de cada cliente
 - 📅 Programación de posts, reels y stories
 - 📊 Analytics: likes, comentarios, reach y engagement por cuenta
-- 🗄️ Base de datos en un archivo local (`data/vaultpost.db`) — se crea sola al arrancar
+- 🗄️ Tablas creadas automáticamente en PostgreSQL al arrancar (sin migraciones manuales)
 
 ## Inicio rápido
+
+Requiere PostgreSQL (local o remoto). Con `psql`:
+
+```bash
+psql -U postgres -h localhost -c "CREATE DATABASE vaultpost ENCODING 'UTF8' TEMPLATE template0;"
+```
 
 ```bash
 npm install
 cp .env.example .env.local
-# Editar .env.local: generar ENCRYPTION_KEY, SESSION_SECRET y CRON_SECRET
+# Editar .env.local: DATABASE_URL + generar ENCRYPTION_KEY, SESSION_SECRET y CRON_SECRET
 npm run dev
 ```
 
-Al abrir `http://localhost:3000` → "Registrate" → "+ Crear nueva empresa". Listo: no hay nada más que configurar.
+Las tablas se crean solas en el primer arranque. Al abrir `http://localhost:3000` → "Registrate" → "+ Crear nueva empresa".
 
 ### Datos de demostración (opcional)
 
@@ -49,7 +55,7 @@ Crea la empresa **Agencia Demo** con 3 clientes, 5 cuentas sociales, 15 posts pu
 | `ENCRYPTION_KEY` | Clave AES-256 para cifrar tokens de redes sociales (`openssl rand -hex 32`) |
 | `SESSION_SECRET` | Firma de las cookies de sesión (si se omite, se usa `ENCRYPTION_KEY`) |
 | `CRON_SECRET` | Secret para autenticar el cron job de publicación |
-| `DATABASE_PATH` | (Opcional) ruta del archivo SQLite; por defecto `data/vaultpost.db` |
+| `DATABASE_URL` | Cadena de conexión a PostgreSQL, ej. `postgresql://postgres:pass@localhost:5432/vaultpost` |
 
 ## Publicación programada (cron)
 
@@ -84,7 +90,7 @@ Limitaciones actuales: imágenes JPEG solamente (requisito de Meta para `image_u
 
 ## Deploy
 
-La base SQLite vive en el filesystem, así que el deploy necesita un servidor con disco persistente (VPS, Railway, Fly.io, etc.). Para serverless (Vercel) habría que cambiar el driver a [Turso](https://turso.tech) o Postgres ([Neon](https://neon.tech)) — con Drizzle el cambio queda acotado a `lib/db/index.ts`.
+La app es stateless salvo `data/uploads/` (imágenes subidas): sirve en cualquier host con Node (VPS, Railway, Fly.io, Vercel) apuntando `DATABASE_URL` a un Postgres gestionado (Neon, Supabase, RDS…). En serverless conviene un pooler (PgBouncer / pooling del proveedor) y almacenar los uploads en un bucket.
 
 ## Documentación
 

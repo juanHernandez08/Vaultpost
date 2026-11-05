@@ -1,7 +1,7 @@
 import Link from 'next/link'
 import { and, asc, count, eq, gte, inArray } from 'drizzle-orm'
 import { redirect } from 'next/navigation'
-import { db, tables } from '@/lib/db'
+import { db, first, tables } from '@/lib/db'
 import { getCurrentUser } from '@/lib/auth/user'
 import { visibleClientIds, visibleAccountIds } from '@/lib/db/scope'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -24,17 +24,17 @@ function formatDateTime(iso: string): string {
 
 export default async function DashboardPage() {
   const profile = await getCurrentUser()
-  if (!profile) redirect('/login')
+  if (!profile) redirect('/api/auth/logout')
 
-  const clientIds = visibleClientIds(profile)
-  const accountIds = visibleAccountIds(profile)
+  const clientIds = await visibleClientIds(profile)
+  const accountIds = await visibleAccountIds(profile)
 
   const clientsCount = clientIds.length
 
   const accountsCount =
     accountIds.length === 0
       ? 0
-      : (db
+      : ((await db
           .select({ value: count() })
           .from(tables.social_accounts)
           .where(
@@ -43,23 +43,27 @@ export default async function DashboardPage() {
               eq(tables.social_accounts.is_active, true)
             )
           )
-          .get()?.value ?? 0)
+          .then(first))?.value ?? 0)
 
-  function postsCount(status: 'scheduled' | 'published'): number {
+  async function postsCount(status: 'scheduled' | 'published'): Promise<number> {
     if (accountIds.length === 0) return 0
-    return (
-      db
-        .select({ value: count() })
-        .from(tables.scheduled_posts)
-        .where(
-          and(
-            inArray(tables.scheduled_posts.social_account_id, accountIds),
-            eq(tables.scheduled_posts.status, status)
-          )
+    const row = await db
+      .select({ value: count() })
+      .from(tables.scheduled_posts)
+      .where(
+        and(
+          inArray(tables.scheduled_posts.social_account_id, accountIds),
+          eq(tables.scheduled_posts.status, status)
         )
-        .get()?.value ?? 0
-    )
+      )
+      .then(first)
+    return row?.value ?? 0
   }
+
+  const [scheduledCount, publishedCount] = await Promise.all([
+    postsCount('scheduled'),
+    postsCount('published'),
+  ])
 
   const upcoming =
     accountIds.length === 0
@@ -97,14 +101,14 @@ export default async function DashboardPage() {
     },
     {
       label: 'Posts pendientes',
-      value: postsCount('scheduled'),
+      value: scheduledCount,
       icon: Clock,
       color: 'text-amber-500',
       bg: 'bg-amber-50',
     },
     {
       label: 'Publicados',
-      value: postsCount('published'),
+      value: publishedCount,
       icon: CheckCircle2,
       color: 'text-emerald-500',
       bg: 'bg-emerald-50',

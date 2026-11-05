@@ -1,7 +1,7 @@
 // lib/auth/session.ts
 // Sesiones con JWT firmado (HS256) en cookie httpOnly.
 // Usa `jose` (puro JS) para que la verificación también funcione en el
-// middleware (edge runtime), donde better-sqlite3 no está disponible.
+// middleware (edge runtime), donde el driver de PostgreSQL no está disponible.
 import { SignJWT, jwtVerify } from 'jose'
 import { cookies } from 'next/headers'
 

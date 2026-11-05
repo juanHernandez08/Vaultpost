@@ -1,7 +1,7 @@
 // lib/auth/user.ts
 // Helpers para obtener el usuario autenticado desde server components y APIs.
 import { eq } from 'drizzle-orm'
-import { db, tables } from '@/lib/db'
+import { db, first, tables } from '@/lib/db'
 import { getSessionUserId } from './session'
 import type { User, Company, UserRole, UserPermissions } from '@/lib/types'
 
@@ -27,7 +27,7 @@ export async function getCurrentUser(): Promise<User | null> {
   const userId = await getSessionUserId()
   if (!userId) return null
 
-  const row = db.select().from(tables.users).where(eq(tables.users.id, userId)).get()
+  const row = await db.select().from(tables.users).where(eq(tables.users.id, userId)).then(first)
   return row ? toPublicUser(row) : null
 }
 
@@ -37,8 +37,11 @@ export async function getCurrentUserWithCompany(): Promise<ProfileWithCompany | 
   if (!user) return null
 
   const company =
-    db.select().from(tables.companies).where(eq(tables.companies.id, user.company_id)).get() ??
-    null
+    (await db
+      .select()
+      .from(tables.companies)
+      .where(eq(tables.companies.id, user.company_id))
+      .then(first)) ?? null
 
   return { ...user, company }
 }

@@ -10,7 +10,7 @@ export const dynamic = 'force-dynamic'
 
 export default async function FeedPage({ params }: { params: { accountId: string } }) {
   const profile = await getCurrentUser()
-  if (!profile) redirect('/login')
+  if (!profile) redirect('/api/auth/logout')
 
   const account = await db.query.social_accounts.findFirst({
     columns: { id: true, platform: true, username: true, client_id: true },
@@ -21,7 +21,7 @@ export default async function FeedPage({ params }: { params: { accountId: string
   if (!account) notFound()
 
   // Check access (empresa + permisos por cliente)
-  if (!visibleClientIds(profile).includes(account.client_id)) redirect('/')
+  if (!(await visibleClientIds(profile)).includes(account.client_id)) redirect('/')
 
   const posts = await db.query.scheduled_posts.findMany({
     columns: { id: true, content_type: true, caption: true, media_url: true, scheduled_at: true },

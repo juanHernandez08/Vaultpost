@@ -45,10 +45,10 @@ async function runPublish(request: Request) {
   let failed = 0
 
   for (const post of posts) {
-    db.update(tables.scheduled_posts)
+    await db
+      .update(tables.scheduled_posts)
       .set({ status: 'publishing' })
       .where(eq(tables.scheduled_posts.id, post.id))
-      .run()
 
     try {
       const account = post.social_account
@@ -65,20 +65,20 @@ async function runPublish(request: Request) {
       // Cuentas sin token (o Facebook/TikTok): simulación — se marca como
       // publicado sin llamar a APIs externas (integración fase 2)
 
-      db.update(tables.scheduled_posts)
+      await db
+        .update(tables.scheduled_posts)
         .set({ status: 'published', error_msg: null })
         .where(eq(tables.scheduled_posts.id, post.id))
-        .run()
 
       published++
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Error desconocido'
       console.error(`[CRON] Post ${post.id} failed:`, msg)
 
-      db.update(tables.scheduled_posts)
+      await db
+        .update(tables.scheduled_posts)
         .set({ status: 'failed', error_msg: msg })
         .where(eq(tables.scheduled_posts.id, post.id))
-        .run()
 
       failed++
     }

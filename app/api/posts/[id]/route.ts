@@ -1,7 +1,7 @@
 // app/api/posts/[id]/route.ts
 import { NextResponse } from 'next/server'
 import { eq } from 'drizzle-orm'
-import { db, tables } from '@/lib/db'
+import { db, first, tables } from '@/lib/db'
 import { requireAuthApi } from '@/lib/api-guard'
 import { canSchedule } from '@/lib/permissions'
 import { visibleAccountIds } from '@/lib/db/scope'
@@ -26,17 +26,17 @@ export async function PATCH(
     return NextResponse.json({ error: 'Body inválido' }, { status: 400 })
   }
 
-  const post = db
+  const post = await db
     .select({ id: tables.scheduled_posts.id, status: tables.scheduled_posts.status, social_account_id: tables.scheduled_posts.social_account_id })
     .from(tables.scheduled_posts)
     .where(eq(tables.scheduled_posts.id, params.id))
-    .get()
+    .then(first)
 
   if (!post) {
     return NextResponse.json({ error: 'Post no encontrado' }, { status: 404 })
   }
 
-  if (!visibleAccountIds(guard.user).includes(post.social_account_id)) {
+  if (!(await visibleAccountIds(guard.user)).includes(post.social_account_id)) {
     return NextResponse.json({ error: 'Sin acceso a este post' }, { status: 403 })
   }
 
@@ -72,12 +72,11 @@ export async function PATCH(
     return NextResponse.json({ error: 'Ningún campo válido para actualizar' }, { status: 400 })
   }
 
-  const updated = db
+  const [updated] = await db
     .update(tables.scheduled_posts)
     .set(update)
     .where(eq(tables.scheduled_posts.id, params.id))
     .returning()
-    .get()
 
   return NextResponse.json({ post: updated })
 }
@@ -94,17 +93,17 @@ export async function DELETE(
     return NextResponse.json({ error: 'Sin permiso para cancelar posts' }, { status: 403 })
   }
 
-  const post = db
+  const post = await db
     .select({ id: tables.scheduled_posts.id, status: tables.scheduled_posts.status, social_account_id: tables.scheduled_posts.social_account_id })
     .from(tables.scheduled_posts)
     .where(eq(tables.scheduled_posts.id, params.id))
-    .get()
+    .then(first)
 
   if (!post) {
     return NextResponse.json({ error: 'Post no encontrado' }, { status: 404 })
   }
 
-  if (!visibleAccountIds(guard.user).includes(post.social_account_id)) {
+  if (!(await visibleAccountIds(guard.user)).includes(post.social_account_id)) {
     return NextResponse.json({ error: 'Sin acceso a este post' }, { status: 403 })
   }
 
@@ -115,7 +114,7 @@ export async function DELETE(
     )
   }
 
-  db.delete(tables.scheduled_posts).where(eq(tables.scheduled_posts.id, params.id)).run()
+  await db.delete(tables.scheduled_posts).where(eq(tables.scheduled_posts.id, params.id))
 
   return NextResponse.json({ success: true })
 }

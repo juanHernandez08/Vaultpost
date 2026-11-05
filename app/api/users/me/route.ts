@@ -37,12 +37,11 @@ export async function PATCH(request: Request) {
     return NextResponse.json({ error: 'Ningún campo válido para actualizar' }, { status: 400 })
   }
 
-  const updated = db
+  const [updated] = await db
     .update(tables.users)
     .set(update)
     .where(eq(tables.users.id, guard.user.id))
     .returning()
-    .get()
 
   return NextResponse.json({ user: toPublicUser(updated) })
 }

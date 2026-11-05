@@ -1,7 +1,7 @@
 // app/api/clients/[id]/route.ts
 import { NextResponse } from 'next/server'
 import { and, eq } from 'drizzle-orm'
-import { db, tables } from '@/lib/db'
+import { db, first, tables } from '@/lib/db'
 import { requireAdminApi } from '@/lib/api-guard'
 
 export async function PATCH(
@@ -17,12 +17,12 @@ export async function PATCH(
     return NextResponse.json({ error: 'name es requerido' }, { status: 400 })
   }
 
-  const client = db
+  const client = await db
     .update(tables.clients)
     .set({ name: name.trim(), logo_url: logo_url?.trim() || null })
     .where(and(eq(tables.clients.id, params.id), eq(tables.clients.company_id, guard.user.company_id)))
     .returning()
-    .get()
+    .then(first)
 
   if (!client) {
     return NextResponse.json({ error: 'Cliente no encontrado' }, { status: 404 })
@@ -38,11 +38,11 @@ export async function DELETE(
   const guard = await requireAdminApi()
   if (guard.error) return guard.error
 
-  const deleted = db
+  const deleted = await db
     .delete(tables.clients)
     .where(and(eq(tables.clients.id, params.id), eq(tables.clients.company_id, guard.user.company_id)))
     .returning({ id: tables.clients.id })
-    .get()
+    .then(first)
 
   if (!deleted) {
     return NextResponse.json({ error: 'Cliente no encontrado' }, { status: 404 })

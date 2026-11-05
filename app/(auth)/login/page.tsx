@@ -13,11 +13,10 @@ export default async function LoginPage() {
   if (userId) redirect('/')
 
   // Lista pública de empresas para el selector del registro
-  const companies = db
+  const companies = await db
     .select({ id: tables.companies.id, name: tables.companies.name })
     .from(tables.companies)
     .orderBy(asc(tables.companies.name))
-    .all()
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-zinc-50">

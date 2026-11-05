@@ -1,7 +1,7 @@
 // app/api/accounts/[id]/route.ts
 import { NextResponse } from 'next/server'
 import { and, eq, inArray } from 'drizzle-orm'
-import { db, tables } from '@/lib/db'
+import { db, first, tables } from '@/lib/db'
 import { requireAdminApi } from '@/lib/api-guard'
 import { companyClientIds } from '@/lib/db/scope'
 
@@ -13,7 +13,7 @@ export async function DELETE(
   if (guard.error) return guard.error
 
   // Solo cuentas de clientes de la empresa del admin
-  const deleted = db
+  const deleted = await db
     .delete(tables.social_accounts)
     .where(
       and(
@@ -22,7 +22,7 @@ export async function DELETE(
       )
     )
     .returning({ id: tables.social_accounts.id })
-    .get()
+    .then(first)
 
   if (!deleted) {
     return NextResponse.json({ error: 'Cuenta no encontrada' }, { status: 404 })
